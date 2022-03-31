@@ -110,6 +110,7 @@ import java.util.Date;
 import java.util.Dictionary;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -253,6 +254,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** The base URL for job URLs */
   protected String jobHost;
 
+  /** Comma Seperate URL of encoding specialised Workers*/
+  protected List<String> encodingWorkers;
+
   /** The factory used to generate the entity manager */
   protected EntityManagerFactory emf = null;
 
@@ -388,6 +392,14 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         throw new IllegalStateException(e);
       }
     }
+
+    // Find encoding Workers
+        if (cc == null || StringUtils.isBlank(cc.getBundleContext().getProperty("org.opencastproject.encoding.workers"))) {
+            encodingWorkers = Collections.<String>emptyList();
+          } else {
+            encodingWorkers = Arrays.asList(cc.getBundleContext().getProperty("org.opencastproject.encoding.Workers").split("\\s*,\\s*"));
+         }
+
 
     // Whether a service accepts a job whose load exceeds the host’s max load
     if (cc != null) {
@@ -2844,8 +2856,13 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       filteredList.add(service);
     }
 
+    if (jobType.equals("org.opencastproject.composer")){
+        Collections.sort(filteredList, new LoadComparatorEncoding(systemLoad, encodingWorkers));
+    }
     // Sort the list by capacity
-    Collections.sort(filteredList, new LoadComparator(systemLoad));
+    else {
+      Collections.sort(filteredList, new LoadComparator(systemLoad));
+    }
 
     return filteredList;
   }
@@ -3072,6 +3089,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
           // If this is a root job (a new workflow or a new workflow operation), then only dispatch if there is
           // capacity, i. e. the workflow service is ok dispatching the next workflow or the next workflow operation.
+          System.out.println("Type of the job to dispatch: " + job.getJobType());
           if (parentJob == null || TYPE_WORKFLOW.equals(jobType) || parentHasRunningChildren) {
             logger.trace("Using available capacity only for dispatching of {} to a service of type '{}'", job,
                     jobType);
@@ -3079,6 +3097,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           } else {
             logger.trace("Using full list of services for dispatching of {} to a service of type '{}'", job, jobType);
             candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, systemLoad);
+            System.out.println("CandidateServices: " + candidateServices);
           }
 
           // Try to dispatch the job
@@ -3176,6 +3195,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         triedDispatching = true;
 
         String serviceUrl = UrlSupport.concat(registration.getHost(), registration.getPath(), "dispatch");
+        System.out.println("Service Url: " + serviceUrl);
         HttpPost post = new HttpPost(serviceUrl);
 
         // Add current organization and user so they can be used during execution at the remote end
@@ -3384,7 +3404,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
   /**
    * Comparator that will sort service registrations depending on their capacity, wich is defined by the number of jobs
-   * the service's host is already running. The lower that number, the bigger the capacity.
+   * the service's host is already running divided by the MaxLoad of the Server. The lower that number, the bigger the capacity.
    */
   private static final class LoadComparator implements Comparator<ServiceRegistration> {
 
@@ -3417,6 +3437,78 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
     }
 
+  }
+
+  /**
+   * Comparator that will sort service registrations depending on their capacity, which is defined by the number of jobs
+   * the service's host is already running divided by the MaxLoad of the Server. The Comperator will prefere encoding workers The lower that number, the bigger the capacity.
+   */
+  private static final class LoadComparatorEncoding implements Comparator<ServiceRegistration> {
+
+    private SystemLoad loadByHost = null;
+    List<String> encodingWorkers = null;
+
+    /**
+     * Creates a new comparator which is using the given map of host names and loads.
+     *
+     * @param loadByHost
+     *          the current work load by host
+     * @param encodingWorkers
+     */
+    LoadComparatorEncoding(SystemLoad loadByHost, List<String> encodingWorkers) {
+      this.loadByHost = loadByHost;
+      this.encodingWorkers = encodingWorkers;
+    }
+
+    @Override
+    public int compare(ServiceRegistration serviceA, ServiceRegistration serviceB) {
+      String hostA = serviceA.getHost();
+      String hostB = serviceB.getHost();
+      NodeLoad nodeA = loadByHost.get(hostA);
+      System.out.println("hostA: " + hostA + "Load:" + nodeA.getLoadFactor());
+      NodeLoad nodeB = loadByHost.get(hostB);
+      System.out.println("hostB: " + hostB + "Load:" + nodeB.getLoadFactor());
+      System.out.println("encodingWorkers: " + encodingWorkers);
+      System.out.println("A is Encoding: " + isEncodingWorker(hostA, encodingWorkers) +  "B is Encoding: " + isEncodingWorker(hostB, encodingWorkers));
+      if (isEncodingWorker(hostA, encodingWorkers) && !isEncodingWorker(hostB, encodingWorkers)){
+        if (nodeA.getLoadFactor() <= 0.2){
+          System.out.println("A");
+          return -1;
+        }
+        System.out.println("B");
+        return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor()*4);
+      }
+      if (isEncodingWorker(hostB, encodingWorkers) && !isEncodingWorker(hostA, encodingWorkers)){
+        if (nodeB.getLoadFactor() <= 0.2){
+          System.out.println("C");
+          return 1;
+        }
+        System.out.println("D");
+        return Float.compare(nodeA.getLoadFactor()*4, nodeB.getLoadFactor());
+      }
+
+      //If the load factors are about the same, sort based on maximum load
+      if (Math.abs(nodeA.getLoadFactor() - nodeB.getLoadFactor()) <= 0.01) {
+        //NOTE: The sort order below is *reversed* from what you'd expect
+        //When we're comparing the load factors we want the node with the lowest factor to be first
+        //When we're comparing the maximum load value, we want the node with the highest max to be first
+        System.out.println("E");
+        return Float.compare(nodeB.getMaxLoad(), nodeA.getMaxLoad());
+      }
+      System.out.println("F");
+      return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
+
+    }
+
+    private boolean isEncodingWorker(String host, List<String> encodingWorkersList){
+      Iterator<String> WorkerIterator = encodingWorkersList.iterator();
+      while (WorkerIterator.hasNext()) {
+        if (WorkerIterator.next().equals(host)){
+          return true;
+        }
+      }
+      return false;
+    }
   }
 
   /**

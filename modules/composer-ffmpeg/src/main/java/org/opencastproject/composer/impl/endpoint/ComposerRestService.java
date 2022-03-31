@@ -212,6 +212,7 @@ public class ComposerRestService extends AbstractJobProducerEndpoint {
   public Response encode(@FormParam("sourceTrack") String sourceTrackAsXml, @FormParam("profileId") String profileId)
           throws Exception {
     // Ensure that the POST parameters are present
+    System.out.println("ComposerRestService:encode");
     if (StringUtils.isBlank(sourceTrackAsXml) || StringUtils.isBlank(profileId))
       return Response.status(Response.Status.BAD_REQUEST).entity("sourceTrack and profileId must not be null").build();
 
@@ -253,6 +254,7 @@ public class ComposerRestService extends AbstractJobProducerEndpoint {
   public Response parallelencode(@FormParam("sourceTrack") String sourceTrackAsXml, @FormParam("profileId") String profileId)
           throws Exception {
     // Ensure that the POST parameters are present
+    System.out.println("ComposerRestService:parallelencode");
     if (sourceTrackAsXml == null || profileId == null) {
       return Response.status(Response.Status.BAD_REQUEST).entity("sourceTrack and profileId must not be null").build();
     }
