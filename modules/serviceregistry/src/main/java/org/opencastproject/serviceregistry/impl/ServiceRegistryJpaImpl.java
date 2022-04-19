@@ -265,7 +265,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   public String encodingWorkers;
 
   /** Comma Seperate URL of encoding specialised Workers*/
-  public static String testWorkers;
+  public static List<String> testWorkers;
 
   /** The factory used to generate the entity manager */
   protected EntityManagerFactory emf = null;
@@ -842,12 +842,12 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     }
 
     String encodingWorkersString = (String) properties.get(OPT_ENCODINGWORKERS);
-    System.out.println("Encoding Bool:" + StringUtils.isBlank(encodingWorkersString) + "String: " + encodingWorkersString);
+    //System.out.println("Encoding Bool:" + StringUtils.isBlank(encodingWorkersString) + "String: " + encodingWorkersString);
     if (StringUtils.isNotBlank(encodingWorkersString)) {
 //          encodingWorkers = Arrays.asList(encodingWorkersString.split("\\s*,\\s*"));
       encodingWorkers = encodingWorkersString;
-      testWorkers = encodingWorkersString;
-      System.out.println("TESTWROKERS:" + testWorkers );
+      testWorkers = Arrays.asList(encodingWorkersString.split("\\s*,\\s*"));
+      System.out.println("TESTWROKERS:" + encodingWorkersString );
     }
 
     String maxJobAgeString = StringUtils.trimToNull((String) properties.get(OPT_SERVICE_STATISTICS_MAX_JOB_AGE));
@@ -2975,7 +2975,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           }
         }
 
-        System.out.println("Die Encoding Worker sind: " + testWorkers);
+//        System.out.println("Die Encoding Worker sind: " + testWorkers);
 
         int jobsOffset = 0;
         List<JpaJob> dispatchableJobs = null;
@@ -3488,17 +3488,17 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       System.out.println("hostB: " + hostB + "Load:" + nodeB.getLoadFactor());
 
 
-//      Iterator<String> WorkerIterator = specialWorkers.iterator();
-//      while (WorkerIterator.hasNext()) {
-//          System.out.println("encodingWorkers: " + WorkerIterator.next());
-//      }
+      Iterator<String> WorkerIterator = ServiceRegistryJpaImpl.testWorkers.iterator();
+      while (WorkerIterator.hasNext()) {
+          System.out.println("encodingWorkers: " + WorkerIterator.next());
+      }
 
-      System.out.println("Die Encoding Worker sind: " + encodingWorkers);
+//      System.out.println("Die Encoding Worker sind: " + encodingWorkers);
 
-      System.out.println("TEST WORKERS: " + ServiceRegistryJpaImpl.testWorkers);
+//      System.out.println("TEST WORKERS: " + ServiceRegistryJpaImpl.testWorkers);
 
-      System.out.println("A is Encoding: " + isEncodingWorker(hostA, encodingWorkers) +  "B is Encoding: " + isEncodingWorker(hostB, encodingWorkers));
-      if (isEncodingWorker(hostA, encodingWorkers) && !isEncodingWorker(hostB, encodingWorkers)){
+      System.out.println("A is Encoding: " + isEncodingWorker(hostA, testWorkers) +  "B is Encoding: " + isEncodingWorker(hostB, testWorkers));
+      if (isEncodingWorker(hostA, testWorkers) && !isEncodingWorker(hostB, testWorkers)){
         if (nodeA.getLoadFactor() <= 0.2){
           System.out.println("A");
           return -1;
@@ -3506,7 +3506,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         System.out.println("B");
         return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor()*4);
       }
-      if (isEncodingWorker(hostB, encodingWorkers) && !isEncodingWorker(hostA, encodingWorkers)){
+      if (isEncodingWorker(hostB, testWorkers) && !isEncodingWorker(hostA, testWorkers)){
         if (nodeB.getLoadFactor() <= 0.2){
           System.out.println("C");
           return 1;
@@ -3528,16 +3528,16 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
     }
 
-    private boolean isEncodingWorker(String host, String encodingWorkersList){
-//      Iterator<String> WorkerIterator = encodingWorkersList.iterator();
-//      while (WorkerIterator.hasNext()) {
-//        if (WorkerIterator.next().equals(host)){
-//          return true;
-//        }
-//      }
-      if (encodingWorkersList.equals(host)){
-        return true;
+    private boolean isEncodingWorker(String host, List<String> encodingWorkersList){
+      Iterator<String> WorkerIterator = encodingWorkersList.iterator();
+      while (WorkerIterator.hasNext()) {
+        if (WorkerIterator.next().equals(host)){
+          return true;
+        }
       }
+//      if (encodingWorkersList.equals(host)){
+//        return true;
+//      }
       return false;
     }
   }
