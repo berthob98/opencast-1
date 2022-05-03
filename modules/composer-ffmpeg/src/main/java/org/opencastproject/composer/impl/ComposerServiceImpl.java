@@ -375,7 +375,6 @@ public class ComposerServiceImpl extends AbstractJobProducer implements Composer
           throws EncoderException, MediaPackageException {
 
     final String targetTrackId = IdImpl.fromUUID().toString();
-    System.out.println("ComposerServiceImpl:encode");
 
     Map<String, File> files = new HashMap<>();
     // Get the tracks and make sure they exist
@@ -448,7 +447,6 @@ public class ComposerServiceImpl extends AbstractJobProducer implements Composer
    */
   private List <Track> parallelEncode(Job job, Track mediaTrack, String profileId)
           throws EncoderException, MediaPackageException {
-    System.out.println("ComposerServiceImpl:parallelencode");
     if (job == null) {
       throw new EncoderException("The Job parameter must not be null");
     }

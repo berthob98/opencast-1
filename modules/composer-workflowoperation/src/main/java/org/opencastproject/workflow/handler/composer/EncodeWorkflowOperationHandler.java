@@ -124,7 +124,6 @@ public class EncodeWorkflowOperationHandler extends AbstractWorkflowOperationHan
    */
   private WorkflowOperationResult encode(WorkflowInstance workflowInstance)
           throws EncoderException, IOException, NotFoundException, MediaPackageException, WorkflowOperationException {
-    System.out.println("EncodeWorkflowOperationHandler");
     MediaPackage src = workflowInstance.getMediaPackage();
     MediaPackage mediaPackage = (MediaPackage) src.clone();
     WorkflowOperationInstance operation = workflowInstance.getCurrentOperation();
