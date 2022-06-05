@@ -11,6 +11,8 @@ tar xf opencast-dist-presentation-*.tar.gz
 tar xf opencast-dist-worker-*.tar.gz
 
 cp -R opencast-dist-worker opencast-dist-worker2
+cp -R opencast-dist-worker opencast-dist-worker3
+
 
 chown -R bbusskamp:bbusskamp .
 
@@ -19,16 +21,19 @@ ln -s ../../shared-storage opencast-dist-admin/data/opencast
 ln -s ../../shared-storage opencast-dist-presentation/data/opencast
 ln -s ../../shared-storage opencast-dist-worker/data/opencast
 ln -s ../../shared-storage opencast-dist-worker2/data/opencast
+ln -s ../../shared-storage opencast-dist-worker3/data/opencast
 
 sed -i 's_localhost:8080_localhost:8081_' opencast-dist-presentation/etc/custom.properties
 sed -i 's_localhost:8080_localhost:8082_' opencast-dist-worker/etc/custom.properties
 sed -i 's_localhost:8080_localhost:8083_' opencast-dist-worker2/etc/custom.properties
+sed -i 's_localhost:8080_localhost:8084_' opencast-dist-worker3/etc/custom.properties
 
 sed -i 's_port=8080_port=8081_' opencast-dist-presentation/etc/org.ops4j.pax.web.cfg
 sed -i 's_port=8080_port=8082_' opencast-dist-worker/etc/org.ops4j.pax.web.cfg
 sed -i 's_port=8080_port=8083_' opencast-dist-worker2/etc/org.ops4j.pax.web.cfg
+sed -i 's_port=8080_port=8084_' opencast-dist-worker3/etc/org.ops4j.pax.web.cfg
 
-for node in admin presentation worker worker2; do
+for node in admin presentation worker worker2 worker3; do
   # configure database
   sed -i 's_^.*db.jdbc.driver=.*$_org.opencastproject.db.jdbc.driver=org.postgresql.Driver_' \
     "opencast-dist-${node}/etc/custom.properties"
@@ -51,3 +56,5 @@ done
 sed -i 's_^.*dispatch.interval=.*$_dispatch.interval=2_' opencast-dist-admin/etc/org.opencastproject.serviceregistry.impl.ServiceRegistryJpaImpl.cfg
 sed -i 's_^.*dispatch.interval=.*$_dispatch.interval=0_' opencast-dist-presentation/etc/org.opencastproject.serviceregistry.impl.ServiceRegistryJpaImpl.cfg
 sed -i 's_^.*dispatch.interval=.*$_dispatch.interval=0_' opencast-dist-worker/etc/org.opencastproject.serviceregistry.impl.ServiceRegistryJpaImpl.cfg
+
+chown -R bbusskamp:bbusskamp .
