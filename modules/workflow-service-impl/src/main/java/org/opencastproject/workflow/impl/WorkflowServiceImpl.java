@@ -104,6 +104,7 @@ import org.opencastproject.workflow.api.WorkflowParsingException;
 import org.opencastproject.workflow.api.WorkflowQuery;
 import org.opencastproject.workflow.api.WorkflowService;
 import org.opencastproject.workflow.api.WorkflowSet;
+import org.opencastproject.workflow.api.WorkflowSetImpl;
 import org.opencastproject.workflow.api.WorkflowStateException;
 import org.opencastproject.workflow.api.WorkflowStateMapping;
 import org.opencastproject.workflow.api.WorkflowStatistics;
@@ -259,6 +260,9 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
 
   /** List of initially delayed workflows */
   private final List<Long> delayedWorkflows = new ArrayList<Long>();
+
+  protected List<Long> activeWorkflowIDs = new ArrayList<Long>();
+
 
   /** Striped locks for synchronization */
   private final Striped<Lock> lock = Striped.lazyWeakLock(1024);
@@ -625,6 +629,16 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
         // Update also sets ACL and mediapackage metadata
         update(workflowInstance);
 
+        if (!activeWorkflowIDs.contains(workflowInstance.getId())){
+          activeWorkflowIDs.add( workflowInstance.getId());
+          System.out.println("Added Workflow!");
+          try {
+            serviceRegistry.setActiveWorkflows(activeWorkflowIDs);
+          } catch (ServiceRegistryException e) {
+            System.out.println("SR EXCEPTION");
+          }
+        }
+
         return workflowInstance;
       } catch (Throwable t) {
         try {
@@ -839,6 +853,14 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
             }
           }
         }
+      }
+
+      System.out.println("Removed Workflow!");
+      activeWorkflowIDs.remove(workflow.getId());
+      try {
+        serviceRegistry.setActiveWorkflows(activeWorkflowIDs);
+      } catch (ServiceRegistryException e) {
+        System.out.println("SR EXCEPTION");
       }
 
       // Save the updated workflow to the database
@@ -1347,6 +1369,21 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
                   elasticsearchIndex);
         }
         index(workflowInstance);
+        if(!workflowInstance.isActive()){
+          System.out.println("Removed Workflow!");
+            activeWorkflowIDs.remove(workflowInstance.getId());
+          } else if (!activeWorkflowIDs.contains(workflowInstance.getId())) {
+            if (!activeWorkflowIDs.contains(workflowInstance.getId())) {
+              activeWorkflowIDs.add(workflowInstance.getId());
+              System.out.println("Added Workflow!");
+            }
+          }
+        try {
+          serviceRegistry.setActiveWorkflows(activeWorkflowIDs);
+        } catch (ServiceRegistryException e) {
+          System.out.println("SR EXCEPTION");
+        }
+        //        System.out.println(activeWorkflowIDs);
       } catch (ServiceRegistryException e) {
         logger.error(
                 "Update of workflow job %s in the service registry failed, service registry and workflow index may be out of sync",
@@ -1689,6 +1726,37 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
     // Only restrict execution of new jobs
     if (!Operation.START_WORKFLOW.toString().equals(operation))
       return true;
+
+    if (!activeWorkflowIDs.contains(job.getId())){
+      activeWorkflowIDs.add(job.getId());
+    }
+
+    WorkflowSet runningWorkflows = new WorkflowSetImpl();
+    try {
+      runningWorkflows = getWorkflowInstances(new WorkflowQuery()
+          .withState(RUNNING));
+    } catch (WorkflowDatabaseException e) {
+      System.out.println("BOOOM");
+      e.printStackTrace();
+    }
+
+    try {
+
+
+      List<Job> activeWorkflows = serviceRegistry.getJobs(null, Job.Status.RUNNING);
+//      activeWorkflows.removeIf(j -> Operation.START_WORKFLOW.toString().equals(j.getOperation()));
+      List<Long> workflowsIDs = serviceRegistry.getActiveWorkflows();
+      activeWorkflows.removeIf(j -> workflowsIDs.contains(j.getId()));
+
+      System.out.println("ACTIVE: " + runningWorkflows.toString() + "SIZE: " + runningWorkflows.size());
+      if ( runningWorkflows.size() >= serviceRegistry.getMaxWorkflows()) {
+        System.out.println("Workflow Not Accepted! ID: " + job.getId());
+        return false;
+      }
+    } catch (ServiceRegistryException e) {
+      System.out.println("Service Registry BOOOM!");
+      e.printStackTrace();
+    }
 
     // If the first operation is guaranteed to pause, run the job.
     if (job.getArguments().size() > 1 && job.getArguments().get(0) != null) {

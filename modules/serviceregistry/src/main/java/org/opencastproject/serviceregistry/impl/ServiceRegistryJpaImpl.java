@@ -131,6 +131,10 @@ import javax.persistence.RollbackException;
 import javax.persistence.TemporalType;
 import javax.persistence.TypedQuery;
 
+//import com.sun.management.OperatingSystemMXBean;
+////import java.lang.management.OperatingSystemMXBean;
+import java.lang.management.ManagementFactory;
+
 /** JPA implementation of the {@link ServiceRegistry} */
 @Component(
   property = {
@@ -193,6 +197,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
   /** Configuration key for the collection of job statistics */
   protected static final String OPT_JOBSTATISTICS = "jobstats.collect";
+
+  /** Configuration key for the maximum number of parallel workflows */
+  public static final String MAX_WORKFLOWS_CONFIG_KEY = "max.workflows";
 
   /** Configuration key for the retrieval of service statistics: Do not consider jobs older than max_job_age (in days) */
   protected static final String OPT_SERVICE_STATISTICS_MAX_JOB_AGE = "org.opencastproject.statistics.services.max_job_age";
@@ -295,11 +302,16 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** The dispatcher priority list */
   protected final Map<Long, String> dispatchPriorityList = new HashMap<>();
 
+  protected List<Long> runningWorkflows = new ArrayList<Long>();
+
   /** Whether to accept a job whose load exceeds the host’s max load */
   protected Boolean acceptJobLoadsExeedingMaxLoad = true;
 
   // Current system load
   protected float localSystemLoad = 0.0f;
+
+  /** Maximum number of parallel running workflows accepted by the workflow service */
+  protected Integer maxWorkflows = Integer.MAX_VALUE;
 
   /** OSGi DI */
   @Reference(name = "entityManagerFactory", target = "(osgi.unit.name=org.opencastproject.common)")
@@ -402,6 +414,24 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   @Override
   public float getOwnLoad() {
     return localSystemLoad;
+  }
+
+  @Override
+  public double getHardwareLoad() {
+
+//    OperatingSystemMXBean osBean = ManagementFactory.getPlatformMXBean(
+//        OperatingSystemMXBean.class);
+//    // What % CPU load this current JVM is taking, from 0.0-1.0
+//    System.out.println("SUN JVM LOAD: " + osBean.getProcessCpuLoad());
+//
+//    // What % load the overall system is at, from 0.0-1.0
+//    System.out.println("SUN LOAD: " + osBean.getSystemCpuLoad());
+//
+    java.lang.management.OperatingSystemMXBean osBeanJava = ManagementFactory.getPlatformMXBean(java.lang.management.OperatingSystemMXBean.class);
+    System.out.println("JAVA LOAD: " +  osBeanJava.getSystemLoadAverage());
+//
+//    return osBean.getSystemCpuLoad();
+    return osBeanJava.getSystemLoadAverage();
   }
 
   @Override
@@ -828,6 +858,13 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         logger.warn("Can not set service statistics max job age to {}. {} must be an integer", maxJobAgeString,
                 OPT_SERVICE_STATISTICS_MAX_JOB_AGE);
       }
+    }
+
+    String maxWorkflowNumber = StringUtils.trimToNull((String) properties.get(MAX_WORKFLOWS_CONFIG_KEY));
+    System.out.println("maxWorkflow not Blank: " + StringUtils.isNotBlank(maxWorkflowNumber) + "and not null: " + maxWorkflowNumber != null);
+    if (StringUtils.isNotBlank(maxWorkflowNumber) && maxWorkflowNumber != null){
+      maxWorkflows = Integer.parseInt(maxWorkflowNumber);
+      System.out.println("MAX WORKFLOWS" + maxWorkflows);
     }
 
     long dispatchDelay = DEFAULT_DISPATCH_START_DELAY;
@@ -1626,6 +1663,14 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         em.close();
     }
   }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @see org.opencastproject.serviceregistry.api.ServiceRegistry#getMaxWorkflows()
+   */
+  @Override
+  public Integer getMaxWorkflows() { return maxWorkflows; }
 
   /**
    * {@inheritDoc}
@@ -2615,6 +2660,12 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         em.close();
     }
   }
+
+  @Override
+  public void setActiveWorkflows(List<Long> workflowIDs)  throws ServiceRegistryException{ runningWorkflows =   workflowIDs; }
+
+  @Override
+  public List<Long> getActiveWorkflows()  throws ServiceRegistryException{ return runningWorkflows; }
 
   /**
    * Gets the failed jobs history for the given service registration

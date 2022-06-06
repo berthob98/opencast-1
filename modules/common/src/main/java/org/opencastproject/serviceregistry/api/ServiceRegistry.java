@@ -124,6 +124,13 @@ public interface ServiceRegistry {
   float getOwnLoad() throws ServiceRegistryException;
 
   /**
+   * Gets the load value for the current host (ie, the host this service registry lives on
+   *
+   * @return the load value for this host
+   */
+  double getHardwareLoad() throws ServiceRegistryException;
+
+  /**
    * Registers a host to handle a specific type of job
    *
    * @param serviceType
@@ -136,6 +143,8 @@ public interface ServiceRegistry {
    * @throws ServiceRegistryException
    *           if communication with the service registry fails
    */
+
+
   ServiceRegistration registerService(String serviceType, String host, String path) throws ServiceRegistryException;
 
   /**
@@ -619,5 +628,19 @@ public interface ServiceRegistry {
    *           if the service does not exist
    */
   void sanitize(String serviceType, String host) throws NotFoundException;
+
+  /**
+   * Returns the maximum amount of parallel running workflows
+   */
+  Integer getMaxWorkflows();
+
+  /**
+   * Returns the maximum amount of parallel running workflows
+   */
+  void setActiveWorkflows(List<Long> workflowIDs) throws ServiceRegistryException;
+
+  List<Long> getActiveWorkflows() throws ServiceRegistryException;
+
+
 
 }

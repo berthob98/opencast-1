@@ -1004,6 +1004,19 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   }
 
   @Override
+  public Integer getMaxWorkflows() { return null; }
+
+  @Override
+  public void setActiveWorkflows(List<Long> workflowIDs) {
+
+  }
+
+  @Override
+  public List<Long> getActiveWorkflows() {
+    return null;
+  }
+
+  @Override
   public Job getCurrentJob() {
     return this.currentJob;
   }
@@ -1092,6 +1105,11 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   @Override
   public float getOwnLoad() {
     return getCurrentHostLoads().get(getRegistryHostname()).getCurrentLoad();
+  }
+
+  @Override
+  public double getHardwareLoad() throws ServiceRegistryException {
+    return 0;
   }
 
   @Override
