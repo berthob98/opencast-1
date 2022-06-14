@@ -77,7 +77,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.StatusLine;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.message.BasicNameValuePair;
@@ -98,6 +100,7 @@ import org.osgi.util.tracker.ServiceTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
@@ -2911,6 +2914,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     }
   }
 
+
+
   private final Fn<HostRegistration, String> toBaseUrl = new Fn<HostRegistration, String>() {
     @Override
     public String apply(HostRegistration h) {
@@ -2960,6 +2965,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             }
           }
         }
+
+//        getSystemHardwareLoad();
 
         int jobsOffset = 0;
         List<JpaJob> dispatchableJobs = null;
@@ -3026,6 +3033,12 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     private void dispatchDispatchableJobs(EntityManager em, List<JpaJob> jobsToDispatch) {
       //Get the current system load
       SystemLoad systemLoad = getHostLoads(em);
+
+      boolean hardwareLoadsEnabled = true;
+
+      if (hardwareLoadsEnabled){
+        systemLoad = getSystemHardwareLoad(systemLoad);
+      }
 
       for (JpaJob job : jobsToDispatch) {
 
@@ -3311,6 +3324,37 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         return o2.compareTo(o1);
       }
     };
+
+    private SystemLoad getSystemHardwareLoad(SystemLoad systemLoads){
+
+      SystemLoad loads = new SystemLoad();
+
+      List<HostRegistration> hostsHW = getHostRegistrations();
+      for (HostRegistration hostHW : hostsHW){
+        String serviceUrl = UrlSupport.concat(hostHW.toString() , "/services/hardwareload");
+        HttpGet post = new HttpGet(serviceUrl);
+
+        HttpResponse response = null;
+        try {
+          response = client.execute(post);
+
+          StatusLine statusLine = response.getStatusLine();
+          if(statusLine.getStatusCode() == HttpStatus.SC_OK) {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            response.getEntity().writeTo(out);
+            String responseString = out.toString();
+            out.close();
+
+            loads.addNodeLoad(new NodeLoad(hostHW.toString(), Float.parseFloat(responseString), systemLoads.get(hostHW.getBaseUrl()).getMaxLoad() ));
+            System.out.println("HOST: " + hostHW + "LOAD: " + responseString);
+          }
+        } catch (IOException e) {
+          System.out.println("HTTP IO ERROR");
+          e.printStackTrace();
+        }
+      }
+      return loads;
+    }
 
   }
 
