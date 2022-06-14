@@ -1004,19 +1004,6 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   }
 
   @Override
-  public Integer getMaxWorkflows() { return null; }
-
-  @Override
-  public void setActiveWorkflows(List<Long> workflowIDs) {
-
-  }
-
-  @Override
-  public List<Long> getActiveWorkflows() {
-    return null;
-  }
-
-  @Override
   public Job getCurrentJob() {
     return this.currentJob;
   }
