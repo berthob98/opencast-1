@@ -620,4 +620,8 @@ public interface ServiceRegistry {
    */
   void sanitize(String serviceType, String host) throws NotFoundException;
 
+  void setActiveWorkflows(List<Long> workflowIDs) throws ServiceRegistryException;
+
+  List<Long> getActiveWorkflows() throws ServiceRegistryException;
+
 }

@@ -260,6 +260,8 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
   /** List of initially delayed workflows */
   private final List<Long> delayedWorkflows = new ArrayList<Long>();
 
+  protected List<Long> activeWorkflowIDs = new ArrayList<Long>();
+
   /** Striped locks for synchronization */
   private final Striped<Lock> lock = Striped.lazyWeakLock(1024);
   private final Striped<Lock> updateLock = Striped.lazyWeakLock(1024);
@@ -625,6 +627,16 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
         // Update also sets ACL and mediapackage metadata
         update(workflowInstance);
 
+        if (!activeWorkflowIDs.contains(workflowInstance.getId())){
+          activeWorkflowIDs.add( workflowInstance.getId());
+          System.out.println("Added Workflow!");
+          try {
+            serviceRegistry.setActiveWorkflows(activeWorkflowIDs);
+          } catch (ServiceRegistryException e) {
+            System.out.println("SR EXCEPTION");
+          }
+        }
+
         return workflowInstance;
       } catch (Throwable t) {
         try {
@@ -761,8 +773,17 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
 
     try {
       logger.info("Scheduling workflow %s for execution", workflow.getId());
-      Job job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(),
-              Collections.singletonList(Long.toString(workflow.getId())), null, false, null, WORKFLOW_JOB_LOAD);
+      Job job = null;
+      if (serviceRegistry.getJob(workflow.getId()) != null) {
+        job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflow.getId())), null, false,
+            serviceRegistry.getJob(workflow.getId()), WORKFLOW_JOB_LOAD);
+        System.out.println("New Job: " + job + "with Parent: " + serviceRegistry.getJob(workflow.getId()));
+      } else {
+        job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflow.getId())), null, false,
+            null, WORKFLOW_JOB_LOAD);
+        System.out.println("New Job: " + job + "with no Parent Job ");
+      }
+
       operation.setId(job.getId());
       update(workflow);
       job.setStatus(Status.QUEUED);
@@ -874,8 +895,15 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
         case FAILING:
         case RUNNING:
           try {
-            job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(),
-                    Collections.singletonList(Long.toString(workflow.getId())), null, false, null, WORKFLOW_JOB_LOAD);
+            if (serviceRegistry.getJob(workflow.getId()) != null){
+              job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(),
+                  Collections.singletonList(Long.toString(workflow.getId())), null, false, serviceRegistry.getJob(workflow.getId()) , WORKFLOW_JOB_LOAD);
+              System.out.println("New Job: " + job + "with Parent: " + serviceRegistry.getJob(workflow.getId()));
+            } else {
+              job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(),
+                  Collections.singletonList(Long.toString(workflow.getId())), null, false, null , WORKFLOW_JOB_LOAD);
+              System.out.println("New Job: " + job + "with no Parent Job ");
+            }
             currentOperation.setId(job.getId());
             update(workflow);
             job.setStatus(Status.QUEUED);
@@ -1135,9 +1163,16 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
     // certain operations. In the latter case, there is no current paused operation.
     if (OperationState.INSTANTIATED.equals(currentOperation.getState())) {
       try {
-        // the operation has its own job. Update that too.
-        Job operationJob = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(),
-                Collections.singletonList(Long.toString(workflowInstanceId)), null, false, null, WORKFLOW_JOB_LOAD);
+        Job operationJob = null;
+        if (serviceRegistry.getJob(workflowInstance.getId()) != null) {
+          operationJob = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflowInstance.getId())), null, false,
+              serviceRegistry.getJob(workflowInstance.getId()), WORKFLOW_JOB_LOAD);
+          System.out.println("New Job: " + operationJob + "with Parent: " + serviceRegistry.getJob(workflowInstance.getId()));
+        } else {
+          // the operation has its own job. Update that too.
+          operationJob = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflowInstanceId)), null, false, null, WORKFLOW_JOB_LOAD);
+          System.out.println("New Job: " + operationJob + "with no Parent Job ");
+        }
 
         // this method call is publicly visible, so it doesn't necessarily go through the accept method. Set the
         // workflow state manually.
@@ -1347,6 +1382,23 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
                   elasticsearchIndex);
         }
         index(workflowInstance);
+
+        if(!workflowInstance.isActive()){
+          System.out.println("Removed Workflow!");
+          activeWorkflowIDs.remove(workflowInstance.getId());
+        } else if (!activeWorkflowIDs.contains(workflowInstance.getId())) {
+          if (!activeWorkflowIDs.contains(workflowInstance.getId())) {
+            activeWorkflowIDs.add(workflowInstance.getId());
+            System.out.println("Added Workflow!");
+          }
+        }
+        try {
+          serviceRegistry.setActiveWorkflows(activeWorkflowIDs);
+        } catch (ServiceRegistryException e) {
+          System.out.println("SR EXCEPTION");
+        }
+        //        System.out.println(activeWorkflowIDs);
+
       } catch (ServiceRegistryException e) {
         logger.error(
                 "Update of workflow job %s in the service registry failed, service registry and workflow index may be out of sync",
@@ -1689,6 +1741,11 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
     // Only restrict execution of new jobs
     if (!Operation.START_WORKFLOW.toString().equals(operation))
       return true;
+
+
+    if (!activeWorkflowIDs.contains(job.getId())){
+      activeWorkflowIDs.add(job.getId());
+    }
 
     // If the first operation is guaranteed to pause, run the job.
     if (job.getArguments().size() > 1 && job.getArguments().get(0) != null) {

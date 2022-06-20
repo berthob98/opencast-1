@@ -295,6 +295,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** The dispatcher priority list */
   protected final Map<Long, String> dispatchPriorityList = new HashMap<>();
 
+  protected List<Long> runningWorkflows = new ArrayList<Long>();
+
   /** Whether to accept a job whose load exceeds the host’s max load */
   protected Boolean acceptJobLoadsExeedingMaxLoad = true;
 
@@ -2616,6 +2618,12 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     }
   }
 
+  @Override
+  public void setActiveWorkflows(List<Long> workflowIDs)  throws ServiceRegistryException{ runningWorkflows =   workflowIDs; }
+
+  @Override
+  public List<Long> getActiveWorkflows()  throws ServiceRegistryException{ return runningWorkflows; }
+
   /**
    * Gets the failed jobs history for the given service registration
    *
@@ -2938,6 +2946,21 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             }
           }
         }
+
+        System.out.println("RUNNING WORKFLOWS: ");
+          System.out.println(runningWorkflows);
+
+//        List<Job> activeWorkflows = getJobs(null, null);
+//        System.out.println("ACTIVE WORKFLOWS:");
+//
+//        for (Job activeJob : activeWorkflows) {
+//          System.out.println(activeJob);
+//          if (Status.RUNNING.equals(activeJob.getStatus())) {
+//            activeWorkflows.remove(activeJob);
+//          }
+//        }
+
+//        QUEUED, PAUSED, RUNNING, FINISHED, FAILED, DELETED, INSTANTIATED, DISPATCHING, RESTART, CANCELLED, WAITING
 
         int jobsOffset = 0;
         List<JpaJob> dispatchableJobs = null;

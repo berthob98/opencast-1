@@ -500,7 +500,7 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
           jobHosts.put(inMemoryRegistration, jobs);
           continue;
         }
-        if (!service.isReadyToAccept(job)) {
+        if (!service. isReadyToAccept(job)) {
           jobs.remove(job);
           jobHosts.put(inMemoryRegistration, jobs);
           continue;
@@ -1001,6 +1001,16 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   @Override
   public void sanitize(String serviceType, String host) {
     // TODO Auto-generated method stub
+  }
+
+  @Override
+  public void setActiveWorkflows(List<Long> workflowIDs) {
+
+  }
+
+  @Override
+  public List<Long> getActiveWorkflows() {
+    return null;
   }
 
   @Override
