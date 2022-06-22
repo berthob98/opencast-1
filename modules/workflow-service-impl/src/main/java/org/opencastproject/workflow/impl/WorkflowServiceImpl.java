@@ -777,11 +777,11 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
       if (serviceRegistry.getJob(workflow.getId()) != null) {
         job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflow.getId())), null, false,
             serviceRegistry.getJob(workflow.getId()), WORKFLOW_JOB_LOAD);
-        System.out.println("New Job: " + job + "with Parent: " + serviceRegistry.getJob(workflow.getId()));
+//        System.out.println("New Job: " + job + "with Parent: " + serviceRegistry.getJob(workflow.getId()));
       } else {
         job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflow.getId())), null, false,
             null, WORKFLOW_JOB_LOAD);
-        System.out.println("New Job: " + job + "with no Parent Job ");
+//        System.out.println("New Job: " + job + "with no Parent Job ");
       }
 
       operation.setId(job.getId());
@@ -898,11 +898,11 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
             if (serviceRegistry.getJob(workflow.getId()) != null){
               job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(),
                   Collections.singletonList(Long.toString(workflow.getId())), null, false, serviceRegistry.getJob(workflow.getId()) , WORKFLOW_JOB_LOAD);
-              System.out.println("New Job: " + job + "with Parent: " + serviceRegistry.getJob(workflow.getId()));
+//              System.out.println("New Job: " + job + "with Parent: " + serviceRegistry.getJob(workflow.getId()));
             } else {
               job = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(),
                   Collections.singletonList(Long.toString(workflow.getId())), null, false, null , WORKFLOW_JOB_LOAD);
-              System.out.println("New Job: " + job + "with no Parent Job ");
+//              System.out.println("New Job: " + job + "with no Parent Job ");
             }
             currentOperation.setId(job.getId());
             update(workflow);
@@ -1167,11 +1167,11 @@ public class WorkflowServiceImpl extends AbstractIndexProducer implements Workfl
         if (serviceRegistry.getJob(workflowInstance.getId()) != null) {
           operationJob = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflowInstance.getId())), null, false,
               serviceRegistry.getJob(workflowInstance.getId()), WORKFLOW_JOB_LOAD);
-          System.out.println("New Job: " + operationJob + "with Parent: " + serviceRegistry.getJob(workflowInstance.getId()));
+//          System.out.println("New Job: " + operationJob + "with Parent: " + serviceRegistry.getJob(workflowInstance.getId()));
         } else {
           // the operation has its own job. Update that too.
           operationJob = serviceRegistry.createJob(JOB_TYPE, Operation.START_OPERATION.toString(), Collections.singletonList(Long.toString(workflowInstanceId)), null, false, null, WORKFLOW_JOB_LOAD);
-          System.out.println("New Job: " + operationJob + "with no Parent Job ");
+//          System.out.println("New Job: " + operationJob + "with no Parent Job ");
         }
 
         // this method call is publicly visible, so it doesn't necessarily go through the accept method. Set the

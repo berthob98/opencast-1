@@ -2950,6 +2950,11 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         System.out.println("RUNNING WORKFLOWS: ");
           System.out.println(runningWorkflows);
 
+          for (Long workflowdId : runningWorkflows){
+            System.out.println(getJob(workflowdId));
+          }
+
+
 //        List<Job> activeWorkflows = getJobs(null, null);
 //        System.out.println("ACTIVE WORKFLOWS:");
 //
@@ -3000,6 +3005,10 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           }
           if (dispatchableJobs.removeAll(workflowJobs) && dispatchableJobs.isEmpty())
             continue;
+
+
+          dispatchableJobs.sort(new DispatchableComparatorPrio(runningWorkflows));
+
 
           dispatchDispatchableJobs(em, dispatchableJobs);
         } while (jobsFound);
@@ -3472,6 +3481,54 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         else if (jobA.getDateCreated().getTime() > jobB.getDateCreated().getTime())
           return 1;
       }
+
+      // undecided
+      return 0;
+    }
+
+  }
+
+  /**
+   * Comparator that will sort jobs according to their status. Those that were restarted are on top, those that are
+   * queued are next.
+   */
+  static final class DispatchableComparatorPrio implements Comparator<JpaJob> {
+
+    List<Long> workflowIDList = Collections.emptyList();
+
+    DispatchableComparatorPrio(List<Long> workflowIDList) {
+      this.workflowIDList = workflowIDList;
+    }
+
+    @Override
+    public int compare(JpaJob jobA, JpaJob jobB) {
+
+      // Jobs that are in "restart" mode should be handled first
+      if (Status.RESTART.equals(jobA.getStatus()) && !Status.RESTART.equals(jobB.getStatus())) {
+        return -1;
+      } else if (Status.RESTART.equals(jobB.getStatus()) && !Status.RESTART.equals(jobA.getStatus())) {
+        return 1;
+      }
+
+      // Regular jobs should be processed prior to workflow and workflow operation jobs
+      if (TYPE_WORKFLOW.equals(jobA.getJobType()) && !TYPE_WORKFLOW.equals(jobB.getJobType())) {
+        return 1;
+      } else if (TYPE_WORKFLOW.equals(jobB.getJobType()) && !TYPE_WORKFLOW.equals(jobA.getJobType())) {
+        return -1;
+      }
+
+      if (jobA.getParentJob() != null && jobB.getParentJob() != null && workflowIDList.indexOf(jobA.getParentJob().getId()) >= 0 && workflowIDList.indexOf(jobB.getParentJob().getId()) >= 0 ) {
+        System.out.println("Decide Between: " + jobA + "AND" + jobB + "Parent Index A: " + workflowIDList.indexOf(jobA.getParentJob().getId()) + "Parent Index B: " + workflowIDList.indexOf(jobB.getParentJob().getId()));
+        return workflowIDList.indexOf(jobA.getParentJob().getId()) < workflowIDList.indexOf(jobB.getParentJob().getId()) ? -1 : 1;
+      }
+//      // Use created date
+//      if (jobA.getDateCreated() != null && jobB.getDateCreated() != null) {
+//        if (jobA.getDateCreated().getTime() < jobB.getDateCreated().getTime())
+//          return -1;
+//        else if (jobA.getDateCreated().getTime() > jobB.getDateCreated().getTime())
+//          return 1;
+//      }
+
 
       // undecided
       return 0;
