@@ -194,6 +194,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** Configuration key for the collection of job statistics */
   protected static final String OPT_JOBSTATISTICS = "jobstats.collect";
 
+  protected static final String MAX_WORKFLOWS_CONFIG_KEY = "max.workflows";
+
   /** Configuration key for the retrieval of service statistics: Do not consider jobs older than max_job_age (in days) */
   protected static final String OPT_SERVICE_STATISTICS_MAX_JOB_AGE = "org.opencastproject.statistics.services.max_job_age";
 
@@ -295,13 +297,13 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** The dispatcher priority list */
   protected final Map<Long, String> dispatchPriorityList = new HashMap<>();
 
-  protected List<Long> runningWorkflows = new ArrayList<Long>();
-
   /** Whether to accept a job whose load exceeds the host’s max load */
   protected Boolean acceptJobLoadsExeedingMaxLoad = true;
 
   // Current system load
   protected float localSystemLoad = 0.0f;
+
+  protected Integer maxWorkflows = Integer.MAX_VALUE;
 
   /** OSGi DI */
   @Reference(name = "entityManagerFactory", target = "(osgi.unit.name=org.opencastproject.common)")
@@ -362,6 +364,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       if (cc != null && StringUtils.isNotBlank(cc.getBundleContext().getProperty(OPT_MAXLOAD))) {
         try {
           maxLoad = Float.parseFloat(cc.getBundleContext().getProperty(OPT_MAXLOAD));
+          System.out.println("MAXLOAD SET TO: " + maxLoad);
           logger.info("Max load has been set manually to {}", maxLoad);
         } catch (NumberFormatException e) {
           logger.warn("Configuration key '{}' is not an integer. Falling back to the number of cores ({})",
@@ -830,6 +833,13 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         logger.warn("Can not set service statistics max job age to {}. {} must be an integer", maxJobAgeString,
                 OPT_SERVICE_STATISTICS_MAX_JOB_AGE);
       }
+    }
+
+    String maxWorkflowNumber = StringUtils.trimToNull((String) properties.get(MAX_WORKFLOWS_CONFIG_KEY));
+    System.out.println("maxWorkflow not Blank: " + StringUtils.isNotBlank(maxWorkflowNumber) + "and not null: " + maxWorkflowNumber != null);
+    if (StringUtils.isNotBlank(maxWorkflowNumber) && maxWorkflowNumber != null){
+      maxWorkflows = Integer.parseInt(maxWorkflowNumber);
+      System.out.println("MAX WORKFLOWS" + maxWorkflows);
     }
 
     long dispatchDelay = DEFAULT_DISPATCH_START_DELAY;
@@ -1628,6 +1638,15 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         em.close();
     }
   }
+
+
+  /**
+   * {@inheritDoc}
+   *
+   * @see org.opencastproject.serviceregistry.api.ServiceRegistry#getMaxWorkflows()
+   */
+  @Override
+  public Integer getMaxWorkflows() { return maxWorkflows; }
 
   /**
    * {@inheritDoc}
@@ -2618,12 +2637,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     }
   }
 
-  @Override
-  public void setActiveWorkflows(List<Long> workflowIDs)  throws ServiceRegistryException{ runningWorkflows =   workflowIDs; }
-
-  @Override
-  public List<Long> getActiveWorkflows()  throws ServiceRegistryException{ return runningWorkflows; }
-
   /**
    * Gets the failed jobs history for the given service registration
    *
@@ -2947,12 +2960,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           }
         }
 
-        System.out.println("RUNNING WORKFLOWS: ");
-          System.out.println(runningWorkflows);
-
-          for (Long workflowdId : runningWorkflows){
-            System.out.println(getJob(workflowdId));
-          }
 
 
 //        List<Job> activeWorkflows = getJobs(null, null);
@@ -2983,6 +2990,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
               workflowJobs.add(job);
             }
           }
+
           if (dispatchableJobs.removeAll(workflowJobs) && dispatchableJobs.isEmpty())
             continue;
 
@@ -3003,11 +3011,29 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
               workflowJobs.add(job);
             }
           }
+
+
+
+
+//
+              List<Job> workflows = getJobs("org.opencastproject.workflow" , Status.RUNNING);
+//          System.out.println("GET JOBS: " + workflows);
+              workflows.removeIf(j -> !("START_WORKFLOW".equals(j.getOperation())));
+          System.out.println("Workflows:");
+              for( Job w: workflows){
+            System.out.print(w + w.getDateCreated().toString() + w.getDateStarted().toString());
+          }
+          System.out.println("End");
+//              System.out.println("GET WORKFLOWS: " + workflows);
+
+
+          dispatchableJobs.sort(new DispatchableComparatorPrio(workflows));
+
           if (dispatchableJobs.removeAll(workflowJobs) && dispatchableJobs.isEmpty())
             continue;
 
 
-          dispatchableJobs.sort(new DispatchableComparatorPrio(runningWorkflows));
+          dispatchableJobs.sort(new DispatchableComparatorPrio(getJobs("org.opencastproject.workflow" , Status.RUNNING)));
 
 
           dispatchDispatchableJobs(em, dispatchableJobs);
@@ -3494,10 +3520,10 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
    */
   static final class DispatchableComparatorPrio implements Comparator<JpaJob> {
 
-    List<Long> workflowIDList = Collections.emptyList();
+    List<Job> workflows = Collections.emptyList();
 
-    DispatchableComparatorPrio(List<Long> workflowIDList) {
-      this.workflowIDList = workflowIDList;
+    DispatchableComparatorPrio(List<Job> workflows) {
+      this.workflows = workflows;
     }
 
     @Override
@@ -3517,10 +3543,12 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         return -1;
       }
 
-      if (jobA.getParentJob() != null && jobB.getParentJob() != null && workflowIDList.indexOf(jobA.getParentJob().getId()) >= 0 && workflowIDList.indexOf(jobB.getParentJob().getId()) >= 0 ) {
-        System.out.println("Decide Between: " + jobA + "AND" + jobB + "Parent Index A: " + workflowIDList.indexOf(jobA.getParentJob().getId()) + "Parent Index B: " + workflowIDList.indexOf(jobB.getParentJob().getId()));
-        return workflowIDList.indexOf(jobA.getParentJob().getId()) < workflowIDList.indexOf(jobB.getParentJob().getId()) ? -1 : 1;
+      if (jobA.getParentJob() != null && jobB.getParentJob() != null && getJobByID(jobA.getParentJob().getId()) != null && getJobByID(jobB.getParentJob().getId()) != null ) {
+//        System.out.println("Decide Between: " + jobA + "AND" + jobB + "Parent Index A: " + workflowIDList.indexOf(jobA.getParentJob().getId()) + "Parent Index B: " + workflowIDList.indexOf(jobB.getParentJob().getId()));
+        System.out.println(jobA.getId() + "Date: " + getJobByID(jobA.getParentJob().getId()).getDateCreated() + "VS " +  jobB.getId() + "Date: " + getJobByID(jobB.getParentJob().getId()).getDateCreated() + "Decission: "  + getJobByID(jobA.getParentJob().getId()).getDateCreated().compareTo( getJobByID(jobB.getParentJob().getId()).getDateCreated() ) );
+        return getJobByID(jobA.getParentJob().getId()).getDateCreated().compareTo( getJobByID(jobB.getParentJob().getId()).getDateCreated() );
       }
+
 //      // Use created date
 //      if (jobA.getDateCreated() != null && jobB.getDateCreated() != null) {
 //        if (jobA.getDateCreated().getTime() < jobB.getDateCreated().getTime())
@@ -3534,6 +3562,15 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       return 0;
     }
 
+    private Job getJobByID(Long ID){
+        for (Job w : workflows){
+          if (w.getId()== ID ){
+            return w;
+          }
+        }
+        return null;
+    }
   }
+
 
 }

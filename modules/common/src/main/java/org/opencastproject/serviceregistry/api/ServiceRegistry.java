@@ -620,8 +620,9 @@ public interface ServiceRegistry {
    */
   void sanitize(String serviceType, String host) throws NotFoundException;
 
-  void setActiveWorkflows(List<Long> workflowIDs) throws ServiceRegistryException;
-
-  List<Long> getActiveWorkflows() throws ServiceRegistryException;
+  /**
+   * Returns the maximum amount of parallel running workflows
+   */
+  Integer getMaxWorkflows();
 
 }

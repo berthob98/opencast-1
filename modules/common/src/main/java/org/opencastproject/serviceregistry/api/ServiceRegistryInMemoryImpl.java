@@ -500,7 +500,7 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
           jobHosts.put(inMemoryRegistration, jobs);
           continue;
         }
-        if (!service. isReadyToAccept(job)) {
+        if (!service.isReadyToAccept(job)) {
           jobs.remove(job);
           jobHosts.put(inMemoryRegistration, jobs);
           continue;
@@ -1004,14 +1004,7 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   }
 
   @Override
-  public void setActiveWorkflows(List<Long> workflowIDs) {
-
-  }
-
-  @Override
-  public List<Long> getActiveWorkflows() {
-    return null;
-  }
+  public Integer getMaxWorkflows() { return null; }
 
   @Override
   public Job getCurrentJob() {
