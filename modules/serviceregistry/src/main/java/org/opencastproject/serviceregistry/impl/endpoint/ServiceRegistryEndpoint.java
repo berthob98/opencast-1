@@ -764,4 +764,18 @@ public class ServiceRegistryEndpoint {
     }
   }
 
+  @GET
+  @Path("preferredencodings")
+  @Produces(MediaType.TEXT_PLAIN)
+  @RestQuery(name = "hardwareload", description = "Returns the current hardware load on this service registry's node.",
+      returnDescription = "The current hardware load across the cluster", restParameters = {},
+      responses = { @RestResponse(responseCode = SC_OK, description = "Current hardware load for the cluster.") })
+  public Response getHardwareLoad() {
+    try {
+      return Response.ok(serviceRegistry.getPreferredEncodings()).build();
+    } catch (ServiceRegistryException e) {
+      throw new WebApplicationException(e);
+    }
+  }
+
 }

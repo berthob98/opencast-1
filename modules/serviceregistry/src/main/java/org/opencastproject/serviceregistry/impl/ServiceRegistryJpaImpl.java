@@ -201,6 +201,11 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** Configuration key for the encoding preferred worker nodes */
   protected static final String OPT_ENCODINGWORKERS = "org.opencastproject.encoding.workers";
 
+  /** Configuration key for the encoding preferred worker nodes */
+  protected static final String OPT_ENCODINGTHRESHOLD = "org.opencastproject.encoding.workers.threshold";
+
+  protected static final String NUMBER_OF_PREFERRED_ENCODINGS = "org.opencastproject.preffered.encodings";
+
   /** The http client to use when connecting to remote servers */
   protected TrustedHttpClient client = null;
 
@@ -260,6 +265,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** Comma-seperate list with URLs of encoding specialised workers*/
   protected static List<String> encodingWorkers = new ArrayList<String>();
 
+  protected static Integer encodingThershold = 0;
+
   /** The factory used to generate the entity manager */
   protected EntityManagerFactory emf = null;
 
@@ -307,6 +314,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
   // Current system load
   protected float localSystemLoad = 0.0f;
+
+  protected Integer prefferedEncodings = 0;
 
   /** OSGi DI */
   @Reference(target = "(osgi.unit.name=org.opencastproject.common)")
@@ -830,6 +839,24 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     String encodingWorkersString = (String) properties.get(OPT_ENCODINGWORKERS);
     if (StringUtils.isNotBlank(encodingWorkersString)) {
       encodingWorkers = Arrays.asList(encodingWorkersString.split("\\s*,\\s*"));
+    }
+
+    String encodingThersholdString = StringUtils.trimToNull((String) properties.get(OPT_ENCODINGTHRESHOLD));
+    System.out.println("THRESHOLD: " + StringUtils.isNotBlank(encodingThersholdString) + "and not null: " + encodingThersholdString != null);
+    if (StringUtils.isNotBlank(encodingThersholdString) && encodingThersholdString != null){
+      encodingThershold = Integer.parseInt(encodingThersholdString);
+      System.out.println("THRESHOLD: " + encodingThershold);
+    }
+    if (encodingThershold != null && encodingThershold >= 0 && encodingThershold <= 1){
+      encodingThershold = 0;
+    } else {encodingThershold = 0;}
+
+
+    String numPrefferedEncodings = StringUtils.trimToNull((String) properties.get(NUMBER_OF_PREFERRED_ENCODINGS));
+    System.out.println("maxWorkflow not Blank: " + StringUtils.isNotBlank(numPrefferedEncodings) + "and not null: " + numPrefferedEncodings != null);
+    if (StringUtils.isNotBlank(numPrefferedEncodings) && numPrefferedEncodings != null){
+      prefferedEncodings = Integer.parseInt(numPrefferedEncodings);
+      System.out.println("Preffered Encdoings" + prefferedEncodings);
     }
 
     String maxJobAgeString = StringUtils.trimToNull((String) properties.get(OPT_SERVICE_STATISTICS_MAX_JOB_AGE));
@@ -2905,6 +2932,10 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     }
   }
 
+  public Integer getPreferredEncodings(){
+    return prefferedEncodings;
+  }
+
   private final Fn<HostRegistration, String> toBaseUrl = new Fn<HostRegistration, String>() {
     @Override
     public String apply(HostRegistration h) {
@@ -3465,16 +3496,18 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       if (encodingWorkers != null) {
 
         if (isEncodingWorker(hostA, encodingWorkers) && !isEncodingWorker(hostB, encodingWorkers)) {
-          if (nodeA.getLoadFactor() <= 0.4) {
+          System.out.println(hostA + "Load: " + nodeA.getLoadFactor());
+          if (nodeA.getLoadFactor() <= encodingThershold) {
             return -1;
           }
-          return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor() * 4);
+          return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
         }
         if (isEncodingWorker(hostB, encodingWorkers) && !isEncodingWorker(hostA, encodingWorkers)) {
-          if (nodeB.getLoadFactor() <= 0.4) {
+          System.out.println(hostB + "Load: " + nodeB.getLoadFactor());
+          if (nodeB.getLoadFactor() <= encodingThershold) {
             return 1;
           }
-          return Float.compare(nodeA.getLoadFactor() * 4, nodeB.getLoadFactor());
+          return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
         }
 
       }
