@@ -195,6 +195,14 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
     hosts.put(host, hrim);
   }
 
+  @Override
+  public void registerHost(String host, String address, String nodeName, long memory, int cores, float maxLoad,
+      Integer prefferedEncodings) throws ServiceRegistryException {
+    HostRegistrationInMemory hrim = new HostRegistrationInMemory(address, address, nodeName, maxLoad, cores, memory);
+    hrim.setPrefferedEncodings(0);
+    hosts.put(host, hrim);
+  }
+
   /**
    * {@inheritDoc}
    *
@@ -1001,6 +1009,11 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   @Override
   public void sanitize(String serviceType, String host) {
     // TODO Auto-generated method stub
+  }
+
+  @Override
+  public Integer getPreferredEncodings() throws ServiceRegistryException {
+    return 0;
   }
 
   @Override

@@ -147,4 +147,14 @@ public class HostRegistrationInMemory implements HostRegistration {
   public void setNodeName(String nodeName) {
     this.nodeName = nodeName;
   }
+
+  @Override
+  public void setPrefferedEncodings(Integer preferredEncodings) {
+
+  }
+
+  @Override
+  public Integer getPrefferedEncodings() {
+    return null;
+  }
 }

@@ -767,9 +767,9 @@ public class ServiceRegistryEndpoint {
   @GET
   @Path("preferredencodings")
   @Produces(MediaType.TEXT_PLAIN)
-  @RestQuery(name = "hardwareload", description = "Returns the current hardware load on this service registry's node.",
-      returnDescription = "The current hardware load across the cluster", restParameters = {},
-      responses = { @RestResponse(responseCode = SC_OK, description = "Current hardware load for the cluster.") })
+  @RestQuery(name = "prefferedencodings", description = "Returns the number of encoding jobs this worker is preffered for over other workers.",
+      returnDescription = "The number of preffered jobs", restParameters = {},
+      responses = { @RestResponse(responseCode = SC_OK, description = "Number of preffered encoding jobs.") })
   public Response getHardwareLoad() {
     try {
       return Response.ok(serviceRegistry.getPreferredEncodings()).build();

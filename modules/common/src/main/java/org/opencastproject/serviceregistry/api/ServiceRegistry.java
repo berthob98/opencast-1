@@ -53,6 +53,28 @@ public interface ServiceRegistry {
           throws ServiceRegistryException;
 
   /**
+   * Registers a host as a provider of Opencast services.
+   *
+   * @param host
+   *          The base URL for this server
+   * @param address
+   *          The IP address of this host
+   * @param nodeName
+   *          Human readable description of this node
+   * @param memory
+   *          The allocated memory of this host
+   * @param cores
+   *          The available cores of this host
+   * @param maxLoad
+   *          the maximum load this host can support
+   * @throws ServiceRegistryException
+   *           if communication with the service registry fails
+   */
+  void registerHost(String host, String address, String nodeName, long memory, int cores, float maxLoad, Integer prefferedEncodings)
+      throws ServiceRegistryException;
+
+
+  /**
    * Removes an Opencast server from service.
    *
    * @param host

@@ -69,6 +69,9 @@ public class JaxbHostRegistration implements HostRegistration {
   @XmlElement(name = "maintenance")
   protected boolean maintenanceMode;
 
+  @XmlElement(name = "preffered_encodings")
+  private Integer prefferedEncodings;
+
   /**
    * Creates a new host registration which is online and not in maintenance mode.
    */
@@ -339,5 +342,13 @@ public class JaxbHostRegistration implements HostRegistration {
   @Override
   public void setNodeName(String nodeName) {
     this.nodeName = nodeName;
+  }
+
+  @Override
+  public void setPrefferedEncodings(Integer prefferedEncodings){this.prefferedEncodings = prefferedEncodings;}
+
+  @Override
+  public Integer getPrefferedEncodings() {
+    return prefferedEncodings;
   }
 }

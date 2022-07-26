@@ -131,4 +131,8 @@ public interface HostRegistration {
    *          the node name to set
    */
   void setNodeName(String nodeName);
+
+  void setPrefferedEncodings(Integer preferredEncodings);
+
+  Integer getPrefferedEncodings();
 }

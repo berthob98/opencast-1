@@ -389,7 +389,17 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       long maxMemory = Runtime.getRuntime().maxMemory();
       int cores = Runtime.getRuntime().availableProcessors();
 
-      registerHost(hostName, address, nodeName, maxMemory, cores, maxLoad);
+
+      System.out.println("config einlesen");
+      String numPrefferedEncodings = StringUtils.trimToNull((String) cc.getBundleContext().getProperty(NUMBER_OF_PREFERRED_ENCODINGS));
+      System.out.println("prefferedEncoding not Blank: " + StringUtils.isNotBlank(numPrefferedEncodings) + "and not null: " + numPrefferedEncodings != null);
+      if (StringUtils.isNotBlank(numPrefferedEncodings) && numPrefferedEncodings != null){
+        prefferedEncodings = Integer.parseInt(numPrefferedEncodings);
+        System.out.println("Preffered Encdoings" + prefferedEncodings);
+      }
+
+      registerHost(hostName, address, nodeName, maxMemory, cores, maxLoad, prefferedEncodings);
+      System.out.println("REGISTERED: " + hostName + "preffered: " + prefferedEncodings);
     } catch (Exception e) {
       throw new IllegalStateException("Unable to register host " + hostName + " in the service registry", e);
     }
@@ -852,13 +862,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     } else {encodingThershold = 0;}
 
 
-    String numPrefferedEncodings = StringUtils.trimToNull((String) properties.get(NUMBER_OF_PREFERRED_ENCODINGS));
-    System.out.println("maxWorkflow not Blank: " + StringUtils.isNotBlank(numPrefferedEncodings) + "and not null: " + numPrefferedEncodings != null);
-    if (StringUtils.isNotBlank(numPrefferedEncodings) && numPrefferedEncodings != null){
-      prefferedEncodings = Integer.parseInt(numPrefferedEncodings);
-      System.out.println("Preffered Encdoings" + prefferedEncodings);
-    }
-
     String maxJobAgeString = StringUtils.trimToNull((String) properties.get(OPT_SERVICE_STATISTICS_MAX_JOB_AGE));
     if (maxJobAgeString != null) {
       try {
@@ -1220,6 +1223,12 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   @Override
   public void registerHost(String host, String address, String nodeName, long memory, int cores, float maxLoad)
           throws ServiceRegistryException {
+    registerHost(host, address, nodeName, memory, cores, maxLoad, null);
+  }
+
+
+  public void registerHost(String host, String address, String nodeName, long memory, int cores, float maxLoad, Integer prefferedEncodings)
+      throws ServiceRegistryException {
     EntityManager em = null;
     EntityTransaction tx = null;
     try {
@@ -1229,7 +1238,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       // Find the existing registrations for this host and if it exists, update it
       HostRegistrationJpaImpl hostRegistration = fetchHostRegistration(em, host);
       if (hostRegistration == null) {
-        hostRegistration = new HostRegistrationJpaImpl(host, address, nodeName, memory, cores, maxLoad, true, false);
+        hostRegistration = new HostRegistrationJpaImpl(host, address, nodeName, memory, cores, maxLoad, true, false, prefferedEncodings!=null ? prefferedEncodings : 0);
         em.persist(hostRegistration);
       } else {
         hostRegistration.setIpAddress(address);
@@ -1238,6 +1247,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         hostRegistration.setMaxLoad(maxLoad);
         hostRegistration.setOnline(true);
         hostRegistration.setNodeName(nodeName);
+        if(prefferedEncodings != null){ hostRegistration.setPrefferedEncodings(prefferedEncodings);}
         em.merge(hostRegistration);
       }
       logger.info("Registering {} with a maximum load of {}", host, maxLoad);
@@ -1253,6 +1263,40 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         em.close();
     }
   }
+
+  /**
+   * {@inheritDoc}
+   *
+   * @see org.opencastproject.serviceregistry.api.ServiceRegistry#registerHost(String, String, String, long, int, float, Integer)
+   */
+//  @Override
+//  public void registerHost(String host, String address, String nodeName, long memory, int cores, float maxLoad, Integer prefferedEncodings)
+//      throws ServiceRegistryException {
+//    registerHost( host,  address,  nodeName,  memory,  cores,  maxLoad);
+//    EntityManager em = null;
+//    EntityTransaction tx = null;
+//    try {
+//    em = emf.createEntityManager();
+//    tx.begin();
+//    HostRegistrationJpaImpl hostRegistration = fetchHostRegistration(em, host);
+//    hostRegistration.setPrefferedEncodings(prefferedEncodings);
+//    em.merge(hostRegistration);
+//
+//    // Find the existing registrations for this host and if it exists, update it
+//      em.merge(hostRegistration);
+//    tx.commit();
+//    hostsStatistics.updateHost(hostRegistration);
+//  } catch (Exception e) {
+//    if (tx != null && tx.isActive()) {
+//      tx.rollback();
+//    }
+//    throw new ServiceRegistryException(e);
+//  } finally {
+//    if (em != null)
+//      em.close();
+//  }
+//  }
+
 
   /**
    * {@inheritDoc}
@@ -2277,7 +2321,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       SystemLoad loadByHost = getHostLoads(em);
       List<HostRegistration> hostRegistrations = getHostRegistrations();
       List<ServiceRegistration> serviceRegistrations = getServiceRegistrationsByType(serviceType);
-      return getServiceRegistrationsByLoad(serviceType, serviceRegistrations, hostRegistrations, loadByHost);
+      List<Job> runningEncodingJobs = getJobs("org.opencastproject.composer", Status.RUNNING);
+      return getServiceRegistrationsByLoad(serviceType, serviceRegistrations, hostRegistrations, loadByHost, runningEncodingJobs);
     } finally {
       if (em != null)
         em.close();
@@ -2839,7 +2884,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
    */
   protected List<ServiceRegistration> getServiceRegistrationsByLoad(String jobType,
           List<ServiceRegistration> serviceRegistrations, List<HostRegistration> hostRegistrations,
-          final SystemLoad systemLoad) {
+          final SystemLoad systemLoad, List<Job> runningEncodingJobs) {
 
     final List<String> hostBaseUrls = $(hostRegistrations).map(toBaseUrl).toList();
     final List<ServiceRegistration> filteredList = new ArrayList<ServiceRegistration>();
@@ -2886,7 +2931,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
     // Sort the list by capacity and distinguish between composer jobs and other jobs
     if ("org.opencastproject.composer".equals(jobType))
-      Collections.sort(filteredList, new LoadComparatorEncoding(systemLoad));
+      Collections.sort(filteredList, new LoadComparatorEncoding(systemLoad, hostRegistrations, runningEncodingJobs));
     else
       Collections.sort(filteredList, new LoadComparator(systemLoad));
 
@@ -2935,6 +2980,33 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   public Integer getPreferredEncodings(){
     return prefferedEncodings;
   }
+
+//  private void getPrefferedEncodingsAllHosts(List<HostRegistration> hosts){
+//
+//    for (HostRegistration registration : hosts) {
+//
+//      String serviceUrl = UrlSupport.concat(registration.getBaseUrl(), "/services/preferredencodings");
+//      System.out.println(serviceUrl);
+//      HttpPost post = new HttpPost(serviceUrl);
+//
+//      // Add current organization and user so they can be used during execution at the remote end
+//      post.addHeader(ORGANIZATION_HEADER, securityService.getOrganization().getId());
+//      post.addHeader(USER_HEADER, securityService.getUser().getUsername());
+//
+//      // Post the request
+//      HttpResponse response = null;
+//      int responseStatusCode;
+//
+//      try {
+//        response = client.execute(post);
+//      } catch (TrustedHttpClientException e) {
+//        e.printStackTrace();
+//      }
+//      responseStatusCode = response.getStatusLine().getStatusCode();
+//      if (responseStatusCode == HttpStatus.SC_OK){System.out.println(response.getParams());}
+//    }
+//
+//  }
 
   private final Fn<HostRegistration, String> toBaseUrl = new Fn<HostRegistration, String>() {
     @Override
@@ -3051,6 +3123,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     private void dispatchDispatchableJobs(EntityManager em, List<JpaJob> jobsToDispatch) {
       //Get the current system load
       SystemLoad systemLoad = getHostLoads(em);
+      List<Job> runningEncodingJobs = new ArrayList<Job>();
 
       for (JpaJob job : jobsToDispatch) {
 
@@ -3094,6 +3167,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
                   .toList();
           List<ServiceRegistration> candidateServices = null;
 
+//          getPrefferedEncodingsAllHosts(hosts);
+
           // Depending on whether this running job is trying to reach out to other services or whether this is an
           // attempt to execute the next operation in a workflow, choose either from a limited or from the full list
           // of services
@@ -3117,6 +3192,17 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             }
           }
 
+          try {
+            runningEncodingJobs = getJobs("org.opencastproject.composer", Status.RUNNING);
+          } catch (ServiceRegistryException e) {
+            e.printStackTrace();
+          }
+          System.out.println("runningEncodingJobs: ");
+          for(Job j : runningEncodingJobs){
+            System.out.println(j);
+          }
+
+
           // If this is a root job (a new workflow or a new workflow operation), then only dispatch if there is
           // capacity, i. e. the workflow service is ok dispatching the next workflow or the next workflow operation.
           if (parentJob == null || TYPE_WORKFLOW.equals(jobType) || parentHasRunningChildren) {
@@ -3125,7 +3211,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             candidateServices = getServiceRegistrationsWithCapacity(jobType, services, hosts, systemLoad);
           } else {
             logger.trace("Using full list of services for dispatching of {} to a service of type '{}'", job, jobType);
-            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, systemLoad);
+            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, systemLoad, runningEncodingJobs);
           }
 
           // Try to dispatch the job
@@ -3474,14 +3560,22 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   private static final class LoadComparatorEncoding implements Comparator<ServiceRegistration> {
 
     private SystemLoad loadByHost = null;
+    private List<HostRegistration> hostRegistrations = null;
+    List<Job> runningEncodingJobs = new ArrayList<Job>();
+
+//    getJobs(null, Status.RUNNING);
+
 
     /**
      * Creates a new comparator which is using the given map of host names and loads.
      *
      * @param loadByHost
+     * @param hostRegistrations
      */
-    LoadComparatorEncoding(SystemLoad loadByHost) {
+    LoadComparatorEncoding(SystemLoad loadByHost, List<HostRegistration> hostRegistrations, List<Job> runningEncodingJobs) {
       this.loadByHost = loadByHost;
+      this.hostRegistrations = hostRegistrations;
+      this.runningEncodingJobs = runningEncodingJobs;
     }
 
     @Override
@@ -3492,25 +3586,29 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       NodeLoad nodeB = loadByHost.get(hostB);
 
 
+      //Fall 1: beide encoding jobs frei -> compare Load
 
-      if (encodingWorkers != null) {
+      //Fall 2: einer Encoding jobs frei -> nimm ihn
 
-        if (isEncodingWorker(hostA, encodingWorkers) && !isEncodingWorker(hostB, encodingWorkers)) {
-          System.out.println(hostA + "Load: " + nodeA.getLoadFactor());
-          if (nodeA.getLoadFactor() <= encodingThershold) {
-            return -1;
-          }
-          return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
-        }
-        if (isEncodingWorker(hostB, encodingWorkers) && !isEncodingWorker(hostA, encodingWorkers)) {
-          System.out.println(hostB + "Load: " + nodeB.getLoadFactor());
-          if (nodeB.getLoadFactor() <= encodingThershold) {
-            return 1;
-          }
-          return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
-        }
 
-      }
+//      if (hostRegistrations != null) {
+//
+//        if (getHostRegistration(hostA).ge getHostRegistration(hostA).getPrefferedEncodings() && !isEncodingWorker(hostB, encodingWorkers)) {
+//          System.out.println(hostA + "Load: " + nodeA.getLoadFactor());
+//          if (nodeA.getLoadFactor() <= encodingThershold) {
+//            return -1;
+//          }
+//          return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
+//        }
+//        if (isEncodingWorker(hostB, encodingWorkers) && !isEncodingWorker(hostA, encodingWorkers)) {
+//          System.out.println(hostB + "Load: " + nodeB.getLoadFactor());
+//          if (nodeB.getLoadFactor() <= encodingThershold) {
+//            return 1;
+//          }
+//          return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
+//        }
+//
+//      }
 
       //If the load factors are about the same, sort based on maximum load
       if (Math.abs(nodeA.getLoadFactor() - nodeB.getLoadFactor()) <= 0.01) {
@@ -3523,15 +3621,27 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
     }
 
-    private boolean isEncodingWorker(String host, List<String> encodingWorkersList) {
-      Iterator<String> workerIterator = encodingWorkersList.iterator();
-      while (workerIterator.hasNext()) {
-        if (workerIterator.next().equals(host)) {
-          return true;
-        }
+//    private boolean isEncodingWorker(String host, List<String> encodingWorkersList) {
+//      Iterator<String> workerIterator = encodingWorkersList.iterator();
+//      while (workerIterator.hasNext()) {
+//        if (workerIterator.next().equals(host)) {
+//          return true;
+//        }
+//      }
+//      return false;
+//    }
+//      private boolean isEncodingWorker(String host, List<String> encodingWorkersList){
+//          return getHost
+//      }
+
+      private HostRegistration getHostRegistration(String host){
+        HostRegistration registration = hostRegistrations.stream()
+            .filter(reg -> host.equals(reg.getBaseUrl()))
+            .findAny()
+            .orElse(null);
+
+        return registration;
       }
-      return false;
-    }
   }
 
   /**

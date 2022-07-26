@@ -111,6 +111,9 @@ public class HostRegistrationJpaImpl implements HostRegistration {
   @Column(name = "maintenance", nullable = false)
   private boolean maintenanceMode = false;;
 
+  @Column(name = "prefferedEncodings", nullable = false, columnDefinition = "integer default 0")
+  private Integer prefferedEncodings;
+
   /**
    * Creates a new host registration which is online
    */
@@ -136,6 +139,29 @@ public class HostRegistrationJpaImpl implements HostRegistration {
     this.online = online;
     this.maintenanceMode = maintenance;
     this.active = true;
+  }
+
+  public HostRegistrationJpaImpl(
+      String baseUrl,
+      String address,
+      String nodeName,
+      long memory,
+      int cores,
+      float maxLoad,
+      boolean online,
+      boolean maintenance,
+      Integer prefferedEncodings
+  ) {
+    this.baseUrl = baseUrl;
+    this.ipAddress = address;
+    this.nodeName = nodeName;
+    this.memory = memory;
+    this.cores = cores;
+    this.maxLoad = maxLoad;
+    this.online = online;
+    this.maintenanceMode = maintenance;
+    this.active = true;
+    this.prefferedEncodings = prefferedEncodings;
   }
 
   @Override
@@ -175,6 +201,17 @@ public class HostRegistrationJpaImpl implements HostRegistration {
   @Override
   public void setNodeName(String nodeName) {
     this.nodeName = nodeName;
+  }
+
+  @Override
+  public void setPrefferedEncodings(Integer prefferedEncodings){
+    System.out.println("Test");
+    this.prefferedEncodings = prefferedEncodings;
+  }
+
+  @Override
+  public Integer getPrefferedEncodings() {
+    return prefferedEncodings;
   }
 
   @Override

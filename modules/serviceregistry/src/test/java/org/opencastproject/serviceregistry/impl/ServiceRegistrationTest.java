@@ -121,7 +121,7 @@ public class ServiceRegistrationTest {
     List<HostRegistration> hosts = serviceRegistry.getHostRegistrations();
     SystemLoad hostLoads = serviceRegistry.getHostLoads(serviceRegistry.emf.createEntityManager());
     List<ServiceRegistration> availableServices = serviceRegistry.getServiceRegistrationsByLoad(JOB_TYPE_1, services,
-            hosts, hostLoads);
+            hosts, hostLoads, null);
 
     // Make sure all hosts are available for processing
     Assert.assertEquals(3, availableServices.size());
@@ -134,14 +134,14 @@ public class ServiceRegistrationTest {
 
     // Recalculate the number of available services
     hostLoads = serviceRegistry.getHostLoads(serviceRegistry.emf.createEntityManager());
-    availableServices = serviceRegistry.getServiceRegistrationsByLoad(JOB_TYPE_1, services, hosts, hostLoads);
+    availableServices = serviceRegistry.getServiceRegistrationsByLoad(JOB_TYPE_1, services, hosts, hostLoads, null);
 
     // Since the host load is not taken into account, still all tree services should show up
     Assert.assertEquals(3, availableServices.size());
 
     // Recalculate the number of available services after ignoring a host
     hosts.remove(regType1Remotehost1.getHostRegistration());
-    availableServices = serviceRegistry.getServiceRegistrationsByLoad(JOB_TYPE_1, services, hosts, hostLoads);
+    availableServices = serviceRegistry.getServiceRegistrationsByLoad(JOB_TYPE_1, services, hosts, hostLoads, null);
 
     // Since host 1 is now ignored, only two more services should show up
     Assert.assertEquals(2, availableServices.size());
