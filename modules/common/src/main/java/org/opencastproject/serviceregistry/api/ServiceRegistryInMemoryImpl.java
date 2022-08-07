@@ -1004,6 +1004,11 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   }
 
   @Override
+  public Integer getPreferredEncodings() throws ServiceRegistryException {
+    return null;
+  }
+
+  @Override
   public Job getCurrentJob() {
     return this.currentJob;
   }
