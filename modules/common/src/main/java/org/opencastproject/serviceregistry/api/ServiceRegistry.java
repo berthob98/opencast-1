@@ -629,5 +629,6 @@ public interface ServiceRegistry {
    */
   void sanitize(String serviceType, String host) throws NotFoundException;
 
+  float getHardwareLoadbyHost(String host);
 
-}
+  }

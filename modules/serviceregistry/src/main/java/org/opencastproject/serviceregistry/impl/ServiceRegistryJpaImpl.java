@@ -423,10 +423,53 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 //    System.out.println("SUN LOAD: " + osBean.getSystemCpuLoad());
 //
     java.lang.management.OperatingSystemMXBean osBeanJava = ManagementFactory.getPlatformMXBean(java.lang.management.OperatingSystemMXBean.class);
-    System.out.println("JAVA LOAD: " +  osBeanJava.getSystemLoadAverage());
+//    System.out.println("JAVA LOAD: " +  osBeanJava.getSystemLoadAverage());
 //
 //    return osBean.getSystemCpuLoad();
     return osBeanJava.getSystemLoadAverage();
+  }
+
+  public SystemLoad getSystemHardwareLoad(SystemLoad systemLoads){
+
+    SystemLoad loads = new SystemLoad();
+
+    List<HostRegistration> hostsHW = getHostRegistrations();
+    for (HostRegistration hostHW : hostsHW){
+      String serviceUrl = UrlSupport.concat(hostHW.toString() , "/services/hardwareload");
+      //        System.out.println("Get load for: " + serviceUrl);
+      float load = getHardwareLoadbyHost(hostHW.toString());
+
+      loads.addNodeLoad(new NodeLoad(hostHW.toString(), load, systemLoads.get(hostHW.getBaseUrl()).getMaxLoad() ));
+      //            System.out.println("HOST: " + hostHW + "LOAD: " + load);
+    }
+    return loads;
+  }
+
+  @Override
+  public float getHardwareLoadbyHost(String host){
+
+    float load = Float.parseFloat("-1.0");
+    String serviceUrl = UrlSupport.concat(host , "/services/hardwareload");
+    HttpGet post = new HttpGet(serviceUrl);
+
+    HttpResponse response = null;
+    try {
+      response = client.execute(post);
+
+      StatusLine statusLine = response.getStatusLine();
+      if(statusLine.getStatusCode() == HttpStatus.SC_OK) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        response.getEntity().writeTo(out);
+        String responseString = out.toString();
+        out.close();
+        //          System.out.println("Response: "+ responseString);
+        load = Float.parseFloat(responseString);
+      }
+    } catch (IOException e) {
+      System.out.println("HTTP IO ERROR");
+      e.printStackTrace();
+    }
+    return load;
   }
 
   @Override
@@ -2259,7 +2302,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     EntityManager em = null;
     try {
       em = emf.createEntityManager();
-      SystemLoad loadByHost = getHostLoads(em);
+      SystemLoad loads = getHostLoads(em); //make this optional
+      SystemLoad loadByHost = getSystemHardwareLoad(loads);
       List<HostRegistration> hostRegistrations = getHostRegistrations();
       List<ServiceRegistration> serviceRegistrations = getServiceRegistrationsByType(serviceType);
       return getServiceRegistrationsByLoad(serviceType, serviceRegistrations, hostRegistrations, loadByHost);
@@ -2641,6 +2685,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     }
   }
 
+
   /**
    * Gets the failed jobs history for the given service registration
    *
@@ -2733,19 +2778,27 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
    *          the complete list of service registrations
    * @param hostRegistrations
    *          the complete list of available host registrations
-   * @param systemLoad
+   * @param systemLoadL
    *          the map of hosts to the number of running jobs
    * @param jobType
    *          the job type for which the services registrations are filtered
    */
   protected List<ServiceRegistration> getServiceRegistrationsWithCapacity(String jobType,
           List<ServiceRegistration> serviceRegistrations, List<HostRegistration> hostRegistrations,
-          final SystemLoad systemLoad) {
+          final SystemLoad systemLoadL) {
+
+//    System.out.println("IN: ");
+//    System.out.println(jobType);
+////    System.out.println(serviceRegistrations);
+//    System.out.println(hostRegistrations);
+//    System.out.println(systemLoad);
+
 
     final List<String> hostBaseUrls = $(hostRegistrations).map(toBaseUrl).toList();
     final List<ServiceRegistration> filteredList = new ArrayList<ServiceRegistration>();
 
     for (ServiceRegistration service : serviceRegistrations) {
+//      System.out.println("Service: " + service.toString() + " Load: "+ systemLoadL.get(service.getHost().toString()).getCurrentLoad() + " / " + systemLoadL.get(service.getHost().toString()).getLoadFactor());
 
       // Skip service if host not available
       if (!hostBaseUrls.contains(service.getHost())) {
@@ -2790,7 +2843,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         logger.warn("Unable to determine max load for host {}", service.getHost());
 
       // Determine the current load for this host
-      Float hostLoad = systemLoad.get(service.getHost()).getLoadFactor();
+      Float hostLoad = systemLoadL.get(service.getHost()).getLoadFactor();
       if (hostLoad == null)
         logger.warn("Unable to determine current load for host {}", service.getHost());
 
@@ -2803,8 +2856,18 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
     }
 
+    for (ServiceRegistration service : filteredList){
+      System.out.println("Service1: " + service.toString() + " Load: "+ systemLoadL.get(service.getHost().toString()).getCurrentLoad() + " / " + systemLoadL.get(service.getHost().toString()).getLoadFactor());
+    }
+
+    LoadComparator comp =  new LoadComparator(systemLoadL);
+    System.out.println( comp + "\n" + systemLoadL.toString());
+
     // Sort the list by capacity
-    Collections.sort(filteredList, new LoadComparator(systemLoad));
+    Collections.sort(filteredList, comp);
+
+//    System.out.println("OUT: ");
+//    System.out.println(filteredList);
 
     return filteredList;
   }
@@ -2869,8 +2932,10 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       filteredList.add(service);
     }
 
+    LoadComparator comp =  new LoadComparator(systemLoad);
+
     // Sort the list by capacity
-    Collections.sort(filteredList, new LoadComparator(systemLoad));
+    Collections.sort(filteredList,comp);
 
     return filteredList;
   }
@@ -3024,6 +3089,49 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       logger.debug("Finished job dispatching");
     }
 
+    public float getHardwareLoadbyHost(String host){
+
+      float load = Float.parseFloat("-1.0");
+      String serviceUrl = UrlSupport.concat(host , "/services/hardwareload");
+      HttpGet post = new HttpGet(serviceUrl);
+
+      HttpResponse response = null;
+      try {
+        response = client.execute(post);
+
+        StatusLine statusLine = response.getStatusLine();
+        if(statusLine.getStatusCode() == HttpStatus.SC_OK) {
+          ByteArrayOutputStream out = new ByteArrayOutputStream();
+          response.getEntity().writeTo(out);
+          String responseString = out.toString();
+          out.close();
+//          System.out.println("Response: "+ responseString);
+          load = Float.parseFloat(responseString);
+        }
+      } catch (IOException e) {
+        System.out.println("HTTP IO ERROR");
+        e.printStackTrace();
+      }
+      return load;
+    }
+
+
+    public SystemLoad getSystemHardwareLoad(SystemLoad systemLoads){  // NodeLoad maxload = getServiceRegistry().getMaxLoadOnNode(getServiceRegistry().getRegistryHostname());
+
+      SystemLoad loads = new SystemLoad();
+
+      List<HostRegistration> hostsHW = getHostRegistrations();
+      for (HostRegistration hostHW : hostsHW){
+        String serviceUrl = UrlSupport.concat(hostHW.toString() , "/services/hardwareload");
+//        System.out.println("Get load for: " + serviceUrl);
+        float load = getHardwareLoadbyHost(hostHW.toString());
+
+            loads.addNodeLoad(new NodeLoad(hostHW.toString(), load, systemLoads.get(hostHW.getBaseUrl()).getMaxLoad() ));
+//            System.out.println("HOST: " + hostHW + "LOAD: " + load);
+          }
+      return loads;
+    }
+
     /**
      * Dispatch the given jobs.
      *
@@ -3033,12 +3141,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     private void dispatchDispatchableJobs(EntityManager em, List<JpaJob> jobsToDispatch) {
       //Get the current system load
       SystemLoad systemLoad = getHostLoads(em);
-
+      SystemLoad systemHardwareLoad = getSystemHardwareLoad(systemLoad);;
+//
       boolean hardwareLoadsEnabled = true;
-
-      if (hardwareLoadsEnabled){
-        systemLoad = getSystemHardwareLoad(systemLoad);
-      }
 
       for (JpaJob job : jobsToDispatch) {
 
@@ -3104,16 +3209,24 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
               }
             }
           }
-
+//          System.out.println(systemLoad.toString());
+//          for(Job jOB : getActiveJobs()){
+//              System.out.println(jOB + " Load: "+ jOB.getJobLoad());
+//          }
           // If this is a root job (a new workflow or a new workflow operation), then only dispatch if there is
           // capacity, i. e. the workflow service is ok dispatching the next workflow or the next workflow operation.
           if (parentJob == null || TYPE_WORKFLOW.equals(jobType) || parentHasRunningChildren) {
+            if(parentJob == null){System.out.println("parentJob is null");}
+            if(TYPE_WORKFLOW.equals(jobType)){System.out.println("jobType Workflow");}
+            if(parentHasRunningChildren){System.out.println("parent has running children");}
             logger.trace("Using available capacity only for dispatching of {} to a service of type '{}'", job,
                     jobType);
-            candidateServices = getServiceRegistrationsWithCapacity(jobType, services, hosts, systemLoad);
+            System.out.println("========================================================= getServiceRegistrationsWithCapacity "+ hardwareLoadsEnabled +  " Load: " + getHardwareLoad());
+            candidateServices = getServiceRegistrationsWithCapacity(jobType, services, hosts, hardwareLoadsEnabled ? systemHardwareLoad : systemLoad ); //BUG is not working as expected (getLoadFactor())
           } else {
             logger.trace("Using full list of services for dispatching of {} to a service of type '{}'", job, jobType);
-            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, systemLoad);
+            System.out.println("========================================================= getServiceRegistrationsByLoad "+ hardwareLoadsEnabled +  " Load: " + getHardwareLoad());
+            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, hardwareLoadsEnabled ? systemHardwareLoad : systemLoad );
           }
 
           // Try to dispatch the job
@@ -3121,7 +3234,11 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           try {
             hostAcceptingJob = dispatchJob(em, job, candidateServices);
             try {
-              systemLoad.updateNodeLoad(hostAcceptingJob, job.getJobLoad());
+              if(!hardwareLoadsEnabled){
+                systemLoad.updateNodeLoad(hostAcceptingJob, job.getJobLoad());
+              } else{
+                systemHardwareLoad.get(hostAcceptingJob).setCurrentLoad(getHardwareLoadbyHost(hostAcceptingJob));
+              }
             } catch (NotFoundException e) {
               logger.info("Host {} not found in load list, cannot dispatch {} to it", hostAcceptingJob, job);
             }
@@ -3325,36 +3442,36 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       }
     };
 
-    private SystemLoad getSystemHardwareLoad(SystemLoad systemLoads){
-
-      SystemLoad loads = new SystemLoad();
-
-      List<HostRegistration> hostsHW = getHostRegistrations();
-      for (HostRegistration hostHW : hostsHW){
-        String serviceUrl = UrlSupport.concat(hostHW.toString() , "/services/hardwareload");
-        HttpGet post = new HttpGet(serviceUrl);
-
-        HttpResponse response = null;
-        try {
-          response = client.execute(post);
-
-          StatusLine statusLine = response.getStatusLine();
-          if(statusLine.getStatusCode() == HttpStatus.SC_OK) {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            response.getEntity().writeTo(out);
-            String responseString = out.toString();
-            out.close();
-
-            loads.addNodeLoad(new NodeLoad(hostHW.toString(), Float.parseFloat(responseString), systemLoads.get(hostHW.getBaseUrl()).getMaxLoad() ));
-            System.out.println("HOST: " + hostHW + "LOAD: " + responseString);
-          }
-        } catch (IOException e) {
-          System.out.println("HTTP IO ERROR");
-          e.printStackTrace();
-        }
-      }
-      return loads;
-    }
+//    private SystemLoad getSystemHardwareLoad(SystemLoad systemLoads){
+//
+//      SystemLoad loads = new SystemLoad();
+//
+//      List<HostRegistration> hostsHW = getHostRegistrations();
+//      for (HostRegistration hostHW : hostsHW){
+//        String serviceUrl = UrlSupport.concat(hostHW.toString() , "/services/hardwareload");
+//        HttpGet post = new HttpGet(serviceUrl);
+//
+//        HttpResponse response = null;
+//        try {
+//          response = client.execute(post);
+//
+//          StatusLine statusLine = response.getStatusLine();
+//          if(statusLine.getStatusCode() == HttpStatus.SC_OK) {
+//            ByteArrayOutputStream out = new ByteArrayOutputStream();
+//            response.getEntity().writeTo(out);
+//            String responseString = out.toString();
+//            out.close();
+//
+//            loads.addNodeLoad(new NodeLoad(hostHW.toString(), Float.parseFloat(responseString), systemLoads.get(hostHW.getBaseUrl()).getMaxLoad() ));
+//            System.out.println("HOST: " + hostHW + "LOAD: " + responseString);
+//          }
+//        } catch (IOException e) {
+//          System.out.println("HTTP IO ERROR");
+//          e.printStackTrace();
+//        }
+//      }
+//      return loads;
+//    }
 
   }
 
@@ -3452,7 +3569,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
    * Comparator that will sort service registrations depending on their capacity, wich is defined by the number of jobs
    * the service's host is already running. The lower that number, the bigger the capacity.
    */
-  private static final class LoadComparator implements Comparator<ServiceRegistration> {
+  private final class LoadComparator implements Comparator<ServiceRegistration> {
 
     private SystemLoad loadByHost = null;
 
@@ -3463,15 +3580,30 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
      *          the current work load by host
      */
     LoadComparator(SystemLoad loadByHost) {
+      System.out.println("NEW COMPARATOR" + this);
+//      this.loadByHost = getSystemHardwareLoad(loadByHost);
       this.loadByHost = loadByHost;
+      System.out.println("COMPARATOR LOAD: " + loadByHost.toString());
     }
 
     @Override
     public int compare(ServiceRegistration serviceA, ServiceRegistration serviceB) {
+
+      System.out.println("=========================================================");
+      System.out.println(loadByHost.toString());
+      System.out.println("=========================================================");
+
+
+      System.out.println("ServiceA: " + serviceA.toString() + " Load: "+ loadByHost.get(serviceA.getHost().toString()).getCurrentLoad() + " / " + loadByHost.get(serviceA.getHost().toString()).getLoadFactor());
+      System.out.println("ServiceB: " + serviceB.toString() + " Load: "+ loadByHost.get(serviceB.getHost().toString()).getCurrentLoad() + " / " + loadByHost.get(serviceB.getHost().toString()).getLoadFactor());
+
+//    getSystemHardwareLoad(loadByHost);
+
       String hostA = serviceA.getHost();
       String hostB = serviceB.getHost();
       NodeLoad nodeA = loadByHost.get(hostA);
       NodeLoad nodeB = loadByHost.get(hostB);
+      System.out.println("Comparing: " + hostA + " " + nodeA.getCurrentLoad() + " vs " + hostB + " " + nodeB.getCurrentLoad());
       //If the load factors are about the same, sort based on maximum load
       if (Math.abs(nodeA.getLoadFactor() - nodeB.getLoadFactor()) <= 0.01) {
         //NOTE: The sort order below is *reversed* from what you'd expect
@@ -3479,8 +3611,51 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         //When we're comparing the maximum load value, we want the node with the highest max to be first
         return Float.compare(nodeB.getMaxLoad(), nodeA.getMaxLoad());
       }
+//      System.out.println("LF A: " + nodeA.getLoadFactor() + "LF B: "+ nodeB.getLoadFactor() + "Outcome: " + Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor()));
       return Float.compare(nodeA.getLoadFactor(), nodeB.getLoadFactor());
 
+    }
+
+    public SystemLoad getSystemHardwareLoad(SystemLoad systemLoads){
+
+      SystemLoad loads = new SystemLoad();
+
+      List<HostRegistration> hostsHW = getHostRegistrations();
+      for (HostRegistration hostHW : hostsHW){
+        String serviceUrl = UrlSupport.concat(hostHW.toString() , "/services/hardwareload");
+        //        System.out.println("Get load for: " + serviceUrl);
+        float load = getHardwareLoadbyHost(hostHW.toString());
+
+        loads.addNodeLoad(new NodeLoad(hostHW.toString(), load, systemLoads.get(hostHW.getBaseUrl()).getMaxLoad() ));
+        //            System.out.println("HOST: " + hostHW + "LOAD: " + load);
+      }
+      return loads;
+    }
+
+    public float getHardwareLoadbyHost(String host){
+
+      float load = Float.parseFloat("-1.0");
+      String serviceUrl = UrlSupport.concat(host , "/services/hardwareload");
+      HttpGet post = new HttpGet(serviceUrl);
+
+      HttpResponse response = null;
+      try {
+        response = client.execute(post);
+
+        StatusLine statusLine = response.getStatusLine();
+        if(statusLine.getStatusCode() == HttpStatus.SC_OK) {
+          ByteArrayOutputStream out = new ByteArrayOutputStream();
+          response.getEntity().writeTo(out);
+          String responseString = out.toString();
+          out.close();
+          //          System.out.println("Response: "+ responseString);
+          load = Float.parseFloat(responseString);
+        }
+      } catch (IOException e) {
+        System.out.println("HTTP IO ERROR");
+        e.printStackTrace();
+      }
+      return load;
     }
 
   }

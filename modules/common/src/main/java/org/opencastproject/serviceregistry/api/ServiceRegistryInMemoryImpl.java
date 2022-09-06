@@ -1004,6 +1004,11 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   }
 
   @Override
+  public float getHardwareLoadbyHost(String host) {
+    return 0;
+  }
+
+  @Override
   public Job getCurrentJob() {
     return this.currentJob;
   }

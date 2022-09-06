@@ -57,4 +57,4 @@ sed -i 's_^.*dispatch.interval=.*$_dispatch.interval=2_' opencast-dist-admin/etc
 sed -i 's_^.*dispatch.interval=.*$_dispatch.interval=0_' opencast-dist-presentation/etc/org.opencastproject.serviceregistry.impl.ServiceRegistryJpaImpl.cfg
 sed -i 's_^.*dispatch.interval=.*$_dispatch.interval=0_' opencast-dist-worker/etc/org.opencastproject.serviceregistry.impl.ServiceRegistryJpaImpl.cfg
 
-chown -R bbusskamp:bbusskamp .
+sudo chown -R bbusskamp:bbusskamp .
