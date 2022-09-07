@@ -201,6 +201,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** Configuration key for the collection of job statistics */
   protected static final String OPT_JOBSTATISTICS = "jobstats.collect";
 
+  /** Configuration key for the collection of job statistics */
+  protected static final String OPT_HARDWARELOAD = "hardware.load.enabled";
+
   /** Configuration key for the retrieval of service statistics: Do not consider jobs older than max_job_age (in days) */
   protected static final String OPT_SERVICE_STATISTICS_MAX_JOB_AGE = "org.opencastproject.statistics.services.max_job_age";
 
@@ -222,6 +225,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
   /** Default setting on job statistics collection */
   static final boolean DEFAULT_JOB_STATISTICS = false;
+
+  /** Default setting on job statistics collection */
+  static final boolean DEFAULT_HARDWARELOAD_ENABLED = true;
 
   /** Default setting on service statistics retrieval */
   static final int DEFAULT_SERVICE_STATISTICS_MAX_JOB_AGE = 14;
@@ -282,6 +288,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
   /** Whether to collect detailed job statistics */
   protected boolean collectJobstats = DEFAULT_JOB_STATISTICS;
+
+  /** Whether to use the hardware load */
+  protected boolean hardwareloadEnabled = DEFAULT_HARDWARELOAD_ENABLED;
 
   /** Maximum age of jobs being considering for service statistics */
   protected int maxJobAge = DEFAULT_SERVICE_STATISTICS_MAX_JOB_AGE;
@@ -884,6 +893,17 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         logger.warn("Job statistics collection flag '{}' is malformed, setting to {}", jobStatsString,
                 DEFAULT_JOB_STATISTICS);
         collectJobstats = DEFAULT_JOB_STATISTICS;
+      }
+    }
+
+    String hardwareloadEnabledString = StringUtils.trimToNull((String) properties.get(OPT_HARDWARELOAD));
+    if (StringUtils.isNotBlank(hardwareloadEnabledString)) {
+      try {
+        hardwareloadEnabled = Boolean.valueOf(hardwareloadEnabledString);
+      } catch (Exception e) {
+        logger.warn("Hardwareload flag '{}' is malformed, setting to {}", hardwareloadEnabledString,
+            DEFAULT_HARDWARELOAD_ENABLED);
+        hardwareloadEnabled = DEFAULT_HARDWARELOAD_ENABLED;
       }
     }
 
@@ -3221,20 +3241,37 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             if(parentHasRunningChildren){System.out.println("parent has running children");}
             logger.trace("Using available capacity only for dispatching of {} to a service of type '{}'", job,
                     jobType);
-            System.out.println("========================================================= getServiceRegistrationsWithCapacity "+ hardwareLoadsEnabled +  " Load: " + getHardwareLoad());
-            candidateServices = getServiceRegistrationsWithCapacity(jobType, services, hosts, hardwareLoadsEnabled ? systemHardwareLoad : systemLoad ); //BUG is not working as expected (getLoadFactor())
+            System.out.println("========================================================= getServiceRegistrationsWithCapacity "+ hardwareloadEnabled +  " Load: " + getHardwareLoad());
+            candidateServices = getServiceRegistrationsWithCapacity(jobType, services, hosts, hardwareloadEnabled ? systemHardwareLoad : systemLoad ); //BUG is not working as expected (getLoadFactor())
           } else {
             logger.trace("Using full list of services for dispatching of {} to a service of type '{}'", job, jobType);
-            System.out.println("========================================================= getServiceRegistrationsByLoad "+ hardwareLoadsEnabled +  " Load: " + getHardwareLoad());
-            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, hardwareLoadsEnabled ? systemHardwareLoad : systemLoad );
+            System.out.println("========================================================= getServiceRegistrationsByLoad "+ hardwareloadEnabled +  " Load: " + getHardwareLoad());
+            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, hardwareloadEnabled ? systemHardwareLoad : systemLoad );
           }
+
+          System.out.println(candidateServices.toString());
+
+          final List<ServiceRegistration> servicesToRemove = new ArrayList<ServiceRegistration>();
+
+          if (hardwareloadEnabled){
+            for (ServiceRegistration serviceReg : candidateServices){
+              System.out.println("Gucken ob Load zu hoch: " + systemHardwareLoad.get(serviceReg.getHost()).getCurrentLoad() + " " + systemHardwareLoad.get(serviceReg.getHost()).getMaxLoad());
+              if (systemHardwareLoad.get(serviceReg.getHost()).getCurrentLoad() > systemHardwareLoad.get(serviceReg.getHost()).getMaxLoad() ){
+                System.out.println("Raus werfen!");
+                System.out.println(job.toString() + "wird erstmal nicht dispatched");
+                servicesToRemove.add(serviceReg);
+              }
+            }
+          }
+          candidateServices.removeAll(servicesToRemove);
+          System.out.println(candidateServices.toString());
 
           // Try to dispatch the job
           String hostAcceptingJob = null;
           try {
             hostAcceptingJob = dispatchJob(em, job, candidateServices);
             try {
-              if(!hardwareLoadsEnabled){
+              if(!hardwareloadEnabled){
                 systemLoad.updateNodeLoad(hostAcceptingJob, job.getJobLoad());
               } else{
                 systemHardwareLoad.get(hostAcceptingJob).setCurrentLoad(getHardwareLoadbyHost(hostAcceptingJob));
