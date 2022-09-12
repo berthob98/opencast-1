@@ -150,7 +150,6 @@ public interface ServiceRegistry {
    * @throws ServiceRegistryException
    *           if communication with the service registry fails
    */
-
   ServiceRegistration registerService(String serviceType, String host, String path) throws ServiceRegistryException;
 
   /**

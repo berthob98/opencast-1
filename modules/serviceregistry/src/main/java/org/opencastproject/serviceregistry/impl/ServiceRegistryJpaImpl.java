@@ -121,6 +121,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
 
 import javax.management.ObjectInstance;
 import javax.persistence.EntityManager;
@@ -133,10 +135,6 @@ import javax.persistence.Query;
 import javax.persistence.RollbackException;
 import javax.persistence.TemporalType;
 import javax.persistence.TypedQuery;
-
-//import com.sun.management.OperatingSystemMXBean;
-////import java.lang.management.OperatingSystemMXBean;
-import java.lang.management.ManagementFactory;
 
 /** JPA implementation of the {@link ServiceRegistry} */
 @Component(
@@ -204,7 +202,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** Configuration key for the collection of job statistics */
   protected static final String OPT_JOBSTATISTICS = "jobstats.collect";
 
-  /** Configuration key for the collection of job statistics */
+  /** Configuration key for the flag to enable the usage of hardware loads */
   protected static final String OPT_HARDWARELOAD = "hardware.load.enabled";
 
   /** Configuration key for the retrieval of service statistics: Do not consider jobs older than max_job_age (in days) */
@@ -229,9 +227,10 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   /** Default setting on job statistics collection */
   static final boolean DEFAULT_JOB_STATISTICS = false;
 
-  /** Default setting on job statistics collection */
+  /** Default setting wether to enable the usage of hardware loads */
   static final boolean DEFAULT_HARDWARELOAD_ENABLED = false;
 
+  /** Default value for the maximum hardware load */
   static final double DEFAULT_MAX_HARDWARELOAD = Runtime.getRuntime().availableProcessors();
 
   /** Default setting on service statistics retrieval */
@@ -429,7 +428,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
   @Override
   public double getHardwareLoad() {
-    java.lang.management.OperatingSystemMXBean osBeanJava = ManagementFactory.getPlatformMXBean(java.lang.management.OperatingSystemMXBean.class);
+    OperatingSystemMXBean osBeanJava = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
     return osBeanJava.getSystemLoadAverage();
   }
 
