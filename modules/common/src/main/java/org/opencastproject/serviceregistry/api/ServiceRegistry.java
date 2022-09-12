@@ -124,13 +124,17 @@ public interface ServiceRegistry {
   float getOwnLoad() throws ServiceRegistryException;
 
   /**
-   * Gets the load value for the current host (ie, the host this service registry lives on
+   * Gets the hardware load value for the current host (ie, the host this service registry lives on
    *
-   * @return the load value for this host
+   * @return the hardware load value for this host
    */
   double getHardwareLoad() throws ServiceRegistryException;
 
-
+  /**
+   * Gets the maximum hardware load value for the current host (ie, the host this service registry lives on
+   *
+   * @return the maximum hardware load value for this host
+   */
   double getMaxHardwareLoad() throws ServiceRegistryException;
 
   /**
@@ -146,7 +150,6 @@ public interface ServiceRegistry {
    * @throws ServiceRegistryException
    *           if communication with the service registry fails
    */
-
 
   ServiceRegistration registerService(String serviceType, String host, String path) throws ServiceRegistryException;
 

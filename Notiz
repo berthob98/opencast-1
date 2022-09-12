@@ -1,6 +1,0 @@
-getHardwareLoads fall sicher machen (was bei nicht gefunden, kein wert (-1))
-
-nicht annahme mit MaxLoad implementieren (isReadzToAccept)
-
-
-getServiceRegistrationsWithCapacity funktioniert die hardwareload nicht bei getServiceRegistrationsByLoad schon

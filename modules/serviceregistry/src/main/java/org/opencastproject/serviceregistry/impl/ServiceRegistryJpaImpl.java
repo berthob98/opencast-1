@@ -2827,7 +2827,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           List<ServiceRegistration> serviceRegistrations, List<HostRegistration> hostRegistrations,
           final SystemLoad systemLoad) {
 
-
     final List<String> hostBaseUrls = $(hostRegistrations).map(toBaseUrl).toList();
     final List<ServiceRegistration> filteredList = new ArrayList<ServiceRegistration>();
 
@@ -2889,11 +2888,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
     }
 
-
-    LoadComparator comp =  new LoadComparator(systemLoad);
-
     // Sort the list by capacity
-    Collections.sort(filteredList, comp);
+    Collections.sort(filteredList, new LoadComparator(systemLoad));
 
     return filteredList;
   }
@@ -2958,10 +2954,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       filteredList.add(service);
     }
 
-    LoadComparator comp =  new LoadComparator(systemLoad);
-
     // Sort the list by capacity
-    Collections.sort(filteredList,comp);
+    Collections.sort(filteredList, new LoadComparator(systemLoad));
 
     return filteredList;
   }
@@ -3004,8 +2998,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         em.close();
     }
   }
-
-
 
   private final Fn<HostRegistration, String> toBaseUrl = new Fn<HostRegistration, String>() {
     @Override
