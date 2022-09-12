@@ -178,7 +178,6 @@ public abstract class AbstractJobProducer implements JobProducer {
     // Add the current job load to compare below
     currentLoad += job.getJobLoad();
 
-    currentLoad = getServiceRegistry().getHardwareLoadbyHost(getServiceRegistry().getRegistryHostname()); //Make this optional
 
     /* Note that this first clause looks at the *job's*, the other two look at the *node's* load
      * We're assuming that if this case is true, then we're also the most powerful node in the system for this service,

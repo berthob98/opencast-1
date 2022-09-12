@@ -1004,11 +1004,6 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   }
 
   @Override
-  public float getHardwareLoadbyHost(String host) {
-    return 0;
-  }
-
-  @Override
   public Job getCurrentJob() {
     return this.currentJob;
   }
@@ -1101,6 +1096,11 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
 
   @Override
   public double getHardwareLoad() throws ServiceRegistryException {
+    return 0;
+  }
+
+  @Override
+  public double getMaxHardwareLoad() throws ServiceRegistryException {
     return 0;
   }
 

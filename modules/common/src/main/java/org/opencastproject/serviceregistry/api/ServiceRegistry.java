@@ -130,6 +130,9 @@ public interface ServiceRegistry {
    */
   double getHardwareLoad() throws ServiceRegistryException;
 
+
+  double getMaxHardwareLoad() throws ServiceRegistryException;
+
   /**
    * Registers a host to handle a specific type of job
    *
@@ -629,6 +632,4 @@ public interface ServiceRegistry {
    */
   void sanitize(String serviceType, String host) throws NotFoundException;
 
-  float getHardwareLoadbyHost(String host);
-
-  }
+}
