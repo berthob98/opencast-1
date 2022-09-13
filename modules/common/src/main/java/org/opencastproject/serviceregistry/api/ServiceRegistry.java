@@ -117,21 +117,21 @@ public interface ServiceRegistry {
   SystemLoad getCurrentHostLoads() throws ServiceRegistryException;
 
   /**
-   * Gets the load value for the current host (ie, the host this service registry lives on
+   * Gets the load value for the current host (ie, the host this service registry lives on)
    *
    * @return the load value for this host
    */
   float getOwnLoad() throws ServiceRegistryException;
 
   /**
-   * Gets the hardware load value for the current host (ie, the host this service registry lives on
+   * Gets the hardware load value for the current host (ie, the host this service registry lives on)
    *
    * @return the hardware load value for this host
    */
   double getHardwareLoad() throws ServiceRegistryException;
 
   /**
-   * Gets the maximum hardware load value for the current host (ie, the host this service registry lives on
+   * Gets the maximum hardware load value for the current host (ie, the host this service registry lives on)
    *
    * @return the maximum hardware load value for this host
    */

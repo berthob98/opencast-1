@@ -429,7 +429,11 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   @Override
   public double getHardwareLoad() {
     OperatingSystemMXBean osBeanJava = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
-    return osBeanJava.getSystemLoadAverage();
+    double hardwareLoad = osBeanJava.getSystemLoadAverage();
+    if (hardwareLoad < 0){
+      logger.warn("Hardware load is not obtainable form the operating system! Disable the usage of hardware load in your configuration.");
+    }
+    return hardwareLoad;
   }
 
   @Override
@@ -451,22 +455,22 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     return loads;
   }
 
-  public float getHardwareLoadbyHost(String host){
-    return getHardwareLoadEndpoint(host, "/services/hardwareload");
+  protected float getHardwareLoadbyHost(String host){
+    return reachHardwareLoadEndpoint(host, "/services/hardwareload");
   }
 
-  public float getMaxHardwareLoadbyHost(String host){
-    return getHardwareLoadEndpoint(host, "/services/maxhardwareload");
+  protected float getMaxHardwareLoadbyHost(String host){
+    return reachHardwareLoadEndpoint(host, "/services/maxhardwareload");
   }
 
-  public float getHardwareLoadEndpoint(String host, String endpoint){
+  //Helper function for getHardwareLoadbyHost and getMaxHardwareLoadbyHost
+  protected float reachHardwareLoadEndpoint(String host, String endpoint){
 
     float load = Float.parseFloat("-1.0");
-
     String serviceUrl = UrlSupport.concat(host , endpoint);
     HttpGet post = new HttpGet(serviceUrl);
-
     HttpResponse response = null;
+
     try {
       response = client.execute(post);
 
@@ -477,9 +481,10 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         String responseString = out.toString();
         out.close();
         load = Float.parseFloat(responseString);
-      }
+        System.out.println(statusLine.getStatusCode());
+      } else { logger.warn("HTTP Status {} trying to reach {}", statusLine.getStatusCode(), serviceUrl);}
     } catch (IOException e) {
-      System.out.println("HTTP IO ERROR");
+      logger.warn("IOException trying to reach {}", serviceUrl);
       e.printStackTrace();
     }
     return load;
@@ -905,6 +910,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       }
     }
 
+    //get hardware load flag from config
     String hardwareLoadEnabledString = StringUtils.trimToNull((String) properties.get(OPT_HARDWARELOAD));
     if (StringUtils.isNotBlank(hardwareLoadEnabledString)) {
       try {
@@ -915,7 +921,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         hardwareLoadEnabled = DEFAULT_HARDWARELOAD_ENABLED;
       }
     }
+    logger.info("Hardware load flag set to {}", hardwareLoadEnabled);
 
+    //get maximum for hardware load from config
     String maxHardwareloadString = StringUtils.trimToNull((String) properties.get(OPT_MAX_HARDWARELOAD));
     if (StringUtils.isNotBlank(maxHardwareloadString)) {
       try {
@@ -926,7 +934,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         maxHardwareLoad = DEFAULT_MAX_HARDWARELOAD;
       }
     }
-
     logger.info("Node maximum load set to {}", maxHardwareLoad);
 
     String maxJobAgeString = StringUtils.trimToNull((String) properties.get(OPT_SERVICE_STATISTICS_MAX_JOB_AGE));
@@ -2347,6 +2354,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       SystemLoad loads = getHostLoads(em);
       List<HostRegistration> hostRegistrations = getHostRegistrations();
       List<ServiceRegistration> serviceRegistrations = getServiceRegistrationsByType(serviceType);
+      // if enabled use the hardware loads instead
       if (hardwareLoadEnabled){
         loads = getSystemHardwareLoad();
       }
@@ -3118,7 +3126,8 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     private void dispatchDispatchableJobs(EntityManager em, List<JpaJob> jobsToDispatch) {
       //Get the current system load
       SystemLoad systemLoad = getHostLoads(em);
-//      SystemLoad systemHardwareLoad = systemLoad;
+
+      //if enabled use the hardware loads instead
       if(hardwareLoadEnabled){
         systemLoad = getSystemHardwareLoad();
       }
@@ -3199,24 +3208,20 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, systemLoad);
           }
 
-          System.out.println(candidateServices.toString());
-
-          final List<ServiceRegistration> servicesToRemove = new ArrayList<ServiceRegistration>();
-
+          //if enabled use the hardware loads to exclude fully occupied services
           if (hardwareLoadEnabled){
+            final List<ServiceRegistration> servicesToRemove = new ArrayList<ServiceRegistration>();
+
             for (ServiceRegistration serviceReg : candidateServices){
-              System.out.println("Gucken ob Load zu hoch: " + systemLoad.get(serviceReg.getHost()).getCurrentLoad() + " " + systemLoad.get(serviceReg.getHost()).getMaxLoad());
               if (systemLoad.get(serviceReg.getHost()).getCurrentLoad() > systemLoad.get(serviceReg.getHost()).getMaxLoad() ){
-                System.out.println("Raus werfen!");
                 servicesToRemove.add(serviceReg);
               }
             }
+            candidateServices.removeAll(servicesToRemove);
+            if(candidateServices.isEmpty()){
+              logger.info("Dispatching of job {} delayed, all potential services of type '{}' are occupied", job, jobType);
+            }
           }
-          candidateServices.removeAll(servicesToRemove);
-          if(candidateServices.isEmpty()){
-            System.out.println(job.toString() + "wird erstmal nicht dispatched");
-          }
-          System.out.println(candidateServices.toString());
 
           // Try to dispatch the job
           String hostAcceptingJob = null;
@@ -3226,6 +3231,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
               if(!hardwareLoadEnabled){
                 systemLoad.updateNodeLoad(hostAcceptingJob, job.getJobLoad());
               } else{
+                //if hardware load is enabled update the hardware load value for the host
                 systemLoad.get(hostAcceptingJob).setCurrentLoad(getHardwareLoadbyHost(hostAcceptingJob));
               }
             } catch (NotFoundException e) {
@@ -3544,19 +3550,11 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
     @Override
     public int compare(ServiceRegistration serviceA, ServiceRegistration serviceB) {
 
-      System.out.println("=========================================================");
-      System.out.println(loadByHost.toString());
-      System.out.println("=========================================================");
-
-
-      System.out.println("ServiceA: " + serviceA.toString() + " Load: "+ loadByHost.get(serviceA.getHost().toString()).getCurrentLoad() + " / " + loadByHost.get(serviceA.getHost().toString()).getLoadFactor());
-      System.out.println("ServiceB: " + serviceB.toString() + " Load: "+ loadByHost.get(serviceB.getHost().toString()).getCurrentLoad() + " / " + loadByHost.get(serviceB.getHost().toString()).getLoadFactor());
-
       String hostA = serviceA.getHost();
       String hostB = serviceB.getHost();
       NodeLoad nodeA = loadByHost.get(hostA);
       NodeLoad nodeB = loadByHost.get(hostB);
-      System.out.println("Comparing: " + hostA + " " + nodeA.getCurrentLoad() + " vs " + hostB + " " + nodeB.getCurrentLoad());
+
       //If the load factors are about the same, sort based on maximum load
       if (Math.abs(nodeA.getLoadFactor() - nodeB.getLoadFactor()) <= 0.01) {
         //NOTE: The sort order below is *reversed* from what you'd expect
