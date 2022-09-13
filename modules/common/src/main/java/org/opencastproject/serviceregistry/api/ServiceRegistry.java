@@ -138,6 +138,13 @@ public interface ServiceRegistry {
   double getMaxHardwareLoad() throws ServiceRegistryException;
 
   /**
+   * Returns true if the hardware load is enabled
+   *
+   * @return the maximum hardware load value for this host
+   */
+  boolean isHardwareLoadEnabled() throws ServiceRegistryException;
+
+  /**
    * Registers a host to handle a specific type of job
    *
    * @param serviceType

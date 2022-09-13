@@ -294,7 +294,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
   protected boolean collectJobstats = DEFAULT_JOB_STATISTICS;
 
   /** Whether to use the hardware load */
-  protected boolean hardwareloadEnabled = DEFAULT_HARDWARELOAD_ENABLED;
+  protected boolean hardwareLoadEnabled = DEFAULT_HARDWARELOAD_ENABLED;
 
   protected double maxHardwareLoad = DEFAULT_MAX_HARDWARELOAD;
 
@@ -483,6 +483,11 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       e.printStackTrace();
     }
     return load;
+  }
+
+  @Override
+  public boolean isHardwareLoadEnabled() {
+    return hardwareLoadEnabled;
   }
 
   @Override
@@ -900,14 +905,14 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       }
     }
 
-    String hardwareloadEnabledString = StringUtils.trimToNull((String) properties.get(OPT_HARDWARELOAD));
-    if (StringUtils.isNotBlank(hardwareloadEnabledString)) {
+    String hardwareLoadEnabledString = StringUtils.trimToNull((String) properties.get(OPT_HARDWARELOAD));
+    if (StringUtils.isNotBlank(hardwareLoadEnabledString)) {
       try {
-        hardwareloadEnabled = Boolean.valueOf(hardwareloadEnabledString);
+        hardwareLoadEnabled = Boolean.valueOf(hardwareLoadEnabledString);
       } catch (Exception e) {
-        logger.warn("Hardwareload flag '{}' is malformed, setting to {}", hardwareloadEnabledString,
+        logger.warn("Hardwareload flag '{}' is malformed, setting to {}", hardwareLoadEnabledString,
             DEFAULT_HARDWARELOAD_ENABLED);
-        hardwareloadEnabled = DEFAULT_HARDWARELOAD_ENABLED;
+        hardwareLoadEnabled = DEFAULT_HARDWARELOAD_ENABLED;
       }
     }
 
@@ -2342,7 +2347,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       SystemLoad loads = getHostLoads(em);
       List<HostRegistration> hostRegistrations = getHostRegistrations();
       List<ServiceRegistration> serviceRegistrations = getServiceRegistrationsByType(serviceType);
-      if (hardwareloadEnabled){
+      if (hardwareLoadEnabled){
         loads = getSystemHardwareLoad();
       }
       return getServiceRegistrationsByLoad(serviceType, serviceRegistrations, hostRegistrations, loads);
@@ -3048,7 +3053,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           }
         }
 
-
         int jobsOffset = 0;
         List<JpaJob> dispatchableJobs = null;
         List<JpaJob> workflowJobs = new ArrayList();
@@ -3115,10 +3119,9 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       //Get the current system load
       SystemLoad systemLoad = getHostLoads(em);
 //      SystemLoad systemHardwareLoad = systemLoad;
-      if(hardwareloadEnabled){
+      if(hardwareLoadEnabled){
         systemLoad = getSystemHardwareLoad();
       }
-
 
       for (JpaJob job : jobsToDispatch) {
 
@@ -3184,22 +3187,23 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
               }
             }
           }
+
           // If this is a root job (a new workflow or a new workflow operation), then only dispatch if there is
           // capacity, i. e. the workflow service is ok dispatching the next workflow or the next workflow operation.
           if (parentJob == null || TYPE_WORKFLOW.equals(jobType) || parentHasRunningChildren) {
             logger.trace("Using available capacity only for dispatching of {} to a service of type '{}'", job,
                     jobType);
-            candidateServices = getServiceRegistrationsWithCapacity(jobType, services, hosts, systemLoad ); //BUG (getLoadFactor())
+            candidateServices = getServiceRegistrationsWithCapacity(jobType, services, hosts, systemLoad);
           } else {
             logger.trace("Using full list of services for dispatching of {} to a service of type '{}'", job, jobType);
-            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, systemLoad );
+            candidateServices = getServiceRegistrationsByLoad(jobType, services, hosts, systemLoad);
           }
 
           System.out.println(candidateServices.toString());
 
           final List<ServiceRegistration> servicesToRemove = new ArrayList<ServiceRegistration>();
 
-          if (hardwareloadEnabled){
+          if (hardwareLoadEnabled){
             for (ServiceRegistration serviceReg : candidateServices){
               System.out.println("Gucken ob Load zu hoch: " + systemLoad.get(serviceReg.getHost()).getCurrentLoad() + " " + systemLoad.get(serviceReg.getHost()).getMaxLoad());
               if (systemLoad.get(serviceReg.getHost()).getCurrentLoad() > systemLoad.get(serviceReg.getHost()).getMaxLoad() ){
@@ -3219,7 +3223,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
           try {
             hostAcceptingJob = dispatchJob(em, job, candidateServices);
             try {
-              if(!hardwareloadEnabled){
+              if(!hardwareLoadEnabled){
                 systemLoad.updateNodeLoad(hostAcceptingJob, job.getJobLoad());
               } else{
                 systemLoad.get(hostAcceptingJob).setCurrentLoad(getHardwareLoadbyHost(hostAcceptingJob));
@@ -3523,7 +3527,7 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
    * Comparator that will sort service registrations depending on their capacity, wich is defined by the number of jobs
    * the service's host is already running. The lower that number, the bigger the capacity.
    */
-  private final class LoadComparator implements Comparator<ServiceRegistration> {
+  private static final class LoadComparator implements Comparator<ServiceRegistration> {
 
     private SystemLoad loadByHost = null;
 

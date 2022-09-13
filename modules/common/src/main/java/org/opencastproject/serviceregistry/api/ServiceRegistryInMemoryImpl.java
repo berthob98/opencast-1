@@ -1105,6 +1105,11 @@ public class ServiceRegistryInMemoryImpl implements ServiceRegistry {
   }
 
   @Override
+  public boolean isHardwareLoadEnabled() throws ServiceRegistryException {
+    return false;
+  }
+
+  @Override
   public String getRegistryHostname() {
     return LOCALHOST;
   }
