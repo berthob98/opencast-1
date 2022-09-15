@@ -178,8 +178,10 @@ public abstract class AbstractJobProducer implements JobProducer {
     // Add the current job load to compare below
     currentLoad += job.getJobLoad();
 
+    //if hardware load is enabled use the hardware load values instead
     if(getServiceRegistry().isHardwareLoadEnabled()){
       currentLoad = (float)getServiceRegistry().getHardwareLoad();
+      maxload.setMaxLoad((float)getServiceRegistry().getMaxHardwareLoad());
     }
 
     /* Note that this first clause looks at the *job's*, the other two look at the *node's* load

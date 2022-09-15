@@ -481,7 +481,6 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         String responseString = out.toString();
         out.close();
         load = Float.parseFloat(responseString);
-        System.out.println(statusLine.getStatusCode());
       } else { logger.warn("HTTP Status {} trying to reach {}", statusLine.getStatusCode(), serviceUrl);}
     } catch (IOException e) {
       logger.warn("IOException trying to reach {}", serviceUrl);
