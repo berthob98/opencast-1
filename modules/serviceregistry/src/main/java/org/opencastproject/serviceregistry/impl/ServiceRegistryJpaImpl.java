@@ -608,6 +608,13 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
       em.persist(jpaJob);
       tx.commit();
 
+      if (parentJob == null){
+        tx.begin();
+        jpaJob.setRootJob(jpaJob);
+        em.persist(jpaJob);
+        tx.commit();
+      }
+
       setJobUri(jpaJob);
       Job job = jpaJob.toJob();
       return job;
@@ -2999,11 +3006,24 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
 
         jobsOffset = 0;
         jobsFound = false;
+
+        List<Job> workflows = getJobs("org.opencastproject.workflow" , Status.RUNNING);
+        //          System.out.println("GET JOBS: " + workflows);
+        workflows.removeIf(j -> !("START_WORKFLOW".equals(j.getOperation())));
+        System.out.println("Workflows:");
+        for( Job w: workflows){
+          System.out.print(w + w.getDateCreated().toString() + w.getDateStarted().toString());
+        }
+        System.out.println("End");
+
         do {
           // dispatch all dispatchable jobs with status queued
           dispatchableJobs = getDispatchableJobsWithStatus(em, jobsOffset, DEFAULT_DISPATCH_JOBS_LIMIT, Status.QUEUED);
           jobsOffset += DEFAULT_DISPATCH_JOBS_LIMIT;
           jobsFound = !dispatchableJobs.isEmpty();
+
+
+          //ggf. START_WORKFLOW und ingest jobs immer annehemen
 
           // skip all jobs of type workflow, we will handle them next
           for (JpaJob job : dispatchableJobs) {
@@ -3012,35 +3032,34 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
             }
           }
 
-
-
-
 //
-              List<Job> workflows = getJobs("org.opencastproject.workflow" , Status.RUNNING);
-//          System.out.println("GET JOBS: " + workflows);
-              workflows.removeIf(j -> !("START_WORKFLOW".equals(j.getOperation())));
-          System.out.println("Workflows:");
-              for( Job w: workflows){
-            System.out.print(w + w.getDateCreated().toString() + w.getDateStarted().toString());
-          }
-          System.out.println("End");
 //              System.out.println("GET WORKFLOWS: " + workflows);
 
 
-          dispatchableJobs.sort(new DispatchableComparatorPrio(workflows));
 
           if (dispatchableJobs.removeAll(workflowJobs) && dispatchableJobs.isEmpty())
             continue;
 
+          dispatchableJobs.sort(new DispatchableComparatorPrio(workflows));
 
-          dispatchableJobs.sort(new DispatchableComparatorPrio(getJobs("org.opencastproject.workflow" , Status.RUNNING)));
+          System.out.println("Normal Jobs to dispatch: " + dispatchableJobs);
 
+          //          dispatchableJobs.sort(new DispatchableComparatorPrio(getJobs("org.opencastproject.workflow" , Status.RUNNING)));
 
-          dispatchDispatchableJobs(em, dispatchableJobs);
+          if(maxWorkflows != 14){
+            dispatchDispatchableJobs(em, dispatchableJobs);
+          } else
+            logger.info("Es können aktuell keine Jobs dispatched werden");
         } while (jobsFound);
 
-        if (!workflowJobs.isEmpty())
-          dispatchDispatchableJobs(em, workflowJobs);
+        if (!workflowJobs.isEmpty()) {
+          workflowJobs.sort(new DispatchableComparatorPrio(workflows));
+          System.out.println("Workflow Jobs to dispatch: " + workflowJobs);
+          if (maxWorkflows != 14) {
+            dispatchDispatchableJobs(em, workflowJobs);
+          } else
+            logger.info("Es können aktuell keine Workflow Jobs dispatched werden");
+        }
 
       } catch (Throwable t) {
         logger.warn("Error dispatching jobs", t);
@@ -3543,10 +3562,12 @@ public class ServiceRegistryJpaImpl implements ServiceRegistry, ManagedService {
         return -1;
       }
 
-      if (jobA.getParentJob() != null && jobB.getParentJob() != null && getJobByID(jobA.getParentJob().getId()) != null && getJobByID(jobB.getParentJob().getId()) != null ) {
+      //Here should getRootJob() be used instead of get ParentJob()
+
+      if (jobA.getRootJob() != null && jobB.getRootJob() != null && jobA.getRootJob().getDateCreated() != null && jobB.getRootJob().getDateCreated() != null ) {
 //        System.out.println("Decide Between: " + jobA + "AND" + jobB + "Parent Index A: " + workflowIDList.indexOf(jobA.getParentJob().getId()) + "Parent Index B: " + workflowIDList.indexOf(jobB.getParentJob().getId()));
-        System.out.println(jobA.getId() + "Date: " + getJobByID(jobA.getParentJob().getId()).getDateCreated() + "VS " +  jobB.getId() + "Date: " + getJobByID(jobB.getParentJob().getId()).getDateCreated() + "Decission: "  + getJobByID(jobA.getParentJob().getId()).getDateCreated().compareTo( getJobByID(jobB.getParentJob().getId()).getDateCreated() ) );
-        return getJobByID(jobA.getParentJob().getId()).getDateCreated().compareTo( getJobByID(jobB.getParentJob().getId()).getDateCreated() );
+        System.out.println(jobA.getId() + "Date: " + jobA.getRootJob().getDateCreated() + "VS " +  jobB.getId() + "Date: " + jobB.getRootJob().getDateCreated() + "Decission: "  + jobA.getRootJob().getDateCreated().compareTo(jobB.getRootJob().getDateCreated()));
+        return jobA.getRootJob().getDateCreated().compareTo( jobB.getRootJob().getDateCreated());
       }
 
 //      // Use created date
